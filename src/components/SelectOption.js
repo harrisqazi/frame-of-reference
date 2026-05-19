@@ -38,13 +38,15 @@ const SelectOption = ({ step, setStep }) => {
   const currentTextIndex = useRef(0);
 
   useEffect(() => {
-    // Initial delay of 3 seconds before typing starts
-    const initialDelayId = setTimeout(() => {
-      setDelayComplete(true); // Set delay as complete
-    }, 1000); // 1 second delay
-
-    return () => clearTimeout(initialDelayId); // Clear timeout on unmount
+    const initialDelayId = setTimeout(() => setDelayComplete(true), 400);
+    return () => clearTimeout(initialDelayId);
   }, []);
+
+  useEffect(() => {
+    if (typedText.length >= introductionText.length) {
+      setButtonVisible(true);
+    }
+  }, [typedText, introductionText]);
 
   useEffect(() => {
     if (!delayComplete) return; // Don't do anything if the initial delay isn't complete
@@ -54,7 +56,7 @@ const SelectOption = ({ step, setStep }) => {
 
     if (isWaiting) return; // Don't do anything if we're waiting after typing out a text
 
-    let timeoutLength = isDeleting ? 10 : 30; // Speed up when deleting
+    let timeoutLength = isDeleting ? 4 : 12;
 
     const timerId = setTimeout(() => {
       if (!isDeleting && typedText === fullText) {
@@ -62,12 +64,9 @@ const SelectOption = ({ step, setStep }) => {
         setTimeout(() => {
           setIsWaiting(false);
           setIsDeleting(true);
-        }, 2000);
+        }, 350);
       } else if (isDeleting && typedText === introductionText) {
         setIsDeleting(false);
-        if (currentIdea === 0) {
-          setButtonVisible(true); // Set the button as visible
-        }
         if (currentIdea < ideas.length - 1) {
           setCurrentIndex((prevIndex) => prevIndex + 1);
         }
