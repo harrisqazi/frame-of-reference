@@ -11,10 +11,10 @@ const SCRIPT = [
   { action: "wait", ms: 3000 },
   { action: "type", text: "\n\nBring it back for a moment.", delay: 36 },
   { action: "wait", ms: 2000 },
-  { action: "type", text: "\n\nHold onto it with all 5 senses:\n\n", delay: 36 },
+  { action: "type", text: "\n\nImagine it with all 5 senses:\n\n", delay: 36 },
   {
     action: "type",
-    text: "the feeling of having accomplished that dream, the smell after having created it, the taste of gratitude on your tongue, the sound of the dream being realized",
+    text: "the feeling of having accomplished that dream, \nthe smell after having created it, \nthe taste of gratitude on your tongue, \nthe sight of your vision becoming reality, \nthe sounds in the room after completing your quest",
     delay: 22,
   },
   { action: "dots", count: 4, interval: 1000 },
@@ -43,19 +43,10 @@ const TerminalSimulator = ({ step, setStep }) => {
   const sampledImages = Math.floor(totalImages / 4);
   const scrollAmountPerImage = 20;
   const stepSize = Math.floor(totalImages / sampledImages);
-  const maxIndexAdvancePerSecond = 60;
+  const maxFramesPerSecond = 5;
   const maxFrameIndex = sampledImages - 1;
   const scrollSpacerHeight =
-    maxFrameIndex * scrollAmountPerImage + viewportHeight + 200;
-
-  useEffect(() => {
-    document.documentElement.style.overflowY = "auto";
-    document.body.style.overflowY = "auto";
-    return () => {
-      document.documentElement.style.overflowY = "";
-      document.body.style.overflowY = "";
-    };
-  }, []);
+    maxFrameIndex * scrollAmountPerImage + viewportHeight;
 
   useEffect(() => {
     const updateViewport = () => setViewportHeight(window.innerHeight);
@@ -157,17 +148,10 @@ const TerminalSimulator = ({ step, setStep }) => {
     document.body.scrollTop ||
     0;
 
-  const getMaxScrollTop = useCallback(
-    () => Math.max(0, scrollSpacerHeight - viewportHeight),
-    [scrollSpacerHeight, viewportHeight]
-  );
-
   const getTargetIndex = useCallback(() => {
-    const maxScroll = getMaxScrollTop();
-    if (maxScroll <= 0) return 0;
-    const progress = Math.min(1, getScrollTop() / maxScroll);
-    return Math.min(maxFrameIndex, Math.round(progress * maxFrameIndex));
-  }, [getMaxScrollTop, maxFrameIndex]);
+    const index = Math.ceil(getScrollTop() / scrollAmountPerImage);
+    return Math.min(maxFrameIndex, Math.max(0, index));
+  }, [maxFrameIndex, scrollAmountPerImage]);
 
   const preloadAround = useCallback(
     (index) => {
@@ -201,7 +185,7 @@ const TerminalSimulator = ({ step, setStep }) => {
       const targetIndex = getTargetIndex();
       const maxAdvance = Math.max(
         1,
-        Math.floor((elapsed / 1000) * maxIndexAdvancePerSecond)
+        Math.floor((elapsed / 1000) * maxFramesPerSecond)
       );
 
       if (targetIndex > displayIndexRef.current) {
@@ -219,12 +203,7 @@ const TerminalSimulator = ({ step, setStep }) => {
       setScrollPosition(displayIndexRef.current);
       preloadAround(displayIndexRef.current);
 
-      const maxScroll = getMaxScrollTop();
-      const scrollTop = getScrollTop();
-      const scrollProgress = maxScroll > 0 ? scrollTop / maxScroll : 0;
-
-      if (scrollProgress >= 0.88 || targetIndex >= maxFrameIndex - 1) {
-        displayIndexRef.current = maxFrameIndex;
+      if (displayIndexRef.current >= maxFrameIndex) {
         advanceToNextStep();
       }
 
@@ -235,14 +214,7 @@ const TerminalSimulator = ({ step, setStep }) => {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [
-    images,
-    preloadAround,
-    getTargetIndex,
-    getMaxScrollTop,
-    maxFrameIndex,
-    advanceToNextStep,
-  ]);
+  }, [images, preloadAround, getTargetIndex, maxFrameIndex, advanceToNextStep]);
 
   useEffect(() => {
     if (imgRef.current && images[scrollPosition]) {
@@ -279,7 +251,7 @@ const TerminalSimulator = ({ step, setStep }) => {
           </div>
           <div
             style={{ opacity }}
-            className="fixed h-screen w-full p-12 flex justify-center pointer-events-none"
+            className="fixed h-screen w-full p-12 flex justify-center"
           >
             <div className="text-white w-[400px] pt-8 max-w-11/12 font-mono">
               <p>
