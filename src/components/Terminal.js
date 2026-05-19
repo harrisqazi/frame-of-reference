@@ -6,9 +6,9 @@ The one you let go for something more realistic.
 
 Bring it back for a moment.
 
-Hold onto it with all 5 senses. The feeling of having accomplished that dream, the smell after having created it, the sound of the dream being realized...
+Hold onto it with all 5 senses. The feeling of having accomplished that dream, the smell after having created it, the taste of gratitude on your tongue, the sound of the dream being realized...
 
-Now take it to the source`;
+Now take it to the source  `;
 
 const SENSORY_START = introductionText.indexOf(
   "The feeling of having accomplished"
@@ -39,10 +39,19 @@ const TerminalSimulator = ({ step, setStep }) => {
   const sampledImages = Math.floor(totalImages / 4);
   const scrollAmountPerImage = 20;
   const stepSize = Math.floor(totalImages / sampledImages);
-  const maxIndexAdvancePerSecond = 45;
+  const maxIndexAdvancePerSecond = 60;
   const maxFrameIndex = sampledImages - 1;
   const scrollSpacerHeight =
-    maxFrameIndex * scrollAmountPerImage + viewportHeight;
+    maxFrameIndex * scrollAmountPerImage + viewportHeight + 200;
+
+  useEffect(() => {
+    document.documentElement.style.overflowY = "auto";
+    document.body.style.overflowY = "auto";
+    return () => {
+      document.documentElement.style.overflowY = "";
+      document.body.style.overflowY = "";
+    };
+  }, []);
 
   useEffect(() => {
     const updateViewport = () => setViewportHeight(window.innerHeight);
@@ -90,17 +99,22 @@ const TerminalSimulator = ({ step, setStep }) => {
     document.body.scrollTop ||
     0;
 
+  const getMaxScrollTop = useCallback(
+    () => Math.max(0, scrollSpacerHeight - viewportHeight),
+    [scrollSpacerHeight, viewportHeight]
+  );
+
   const getTargetIndex = useCallback(() => {
-    const scrollTop = getScrollTop();
-    const index = Math.ceil(scrollTop / scrollAmountPerImage);
-    return Math.min(maxFrameIndex, Math.max(0, index));
-  }, [maxFrameIndex, scrollAmountPerImage]);
+    const maxScroll = getMaxScrollTop();
+    if (maxScroll <= 0) return 0;
+    const progress = Math.min(1, getScrollTop() / maxScroll);
+    return Math.min(maxFrameIndex, Math.round(progress * maxFrameIndex));
+  }, [getMaxScrollTop, maxFrameIndex]);
 
   const preloadAround = useCallback(
     (index) => {
       if (!images.length) return;
-      const lookahead = 12;
-      for (let offset = 0; offset <= lookahead; offset++) {
+      for (let offset = 0; offset <= 12; offset++) {
         const target = index + offset;
         if (target < images.length) {
           const img = new Image();
@@ -147,14 +161,12 @@ const TerminalSimulator = ({ step, setStep }) => {
       setScrollPosition(displayIndexRef.current);
       preloadAround(displayIndexRef.current);
 
+      const maxScroll = getMaxScrollTop();
       const scrollTop = getScrollTop();
-      const atScrollEnd =
-        scrollTop + viewportHeight >= scrollSpacerHeight - 40;
-      const atFinalFrame = targetIndex >= maxFrameIndex;
-      const displayCaughtUp =
-        displayIndexRef.current >= maxFrameIndex - 2;
+      const scrollProgress = maxScroll > 0 ? scrollTop / maxScroll : 0;
 
-      if (atScrollEnd || (atFinalFrame && displayCaughtUp)) {
+      if (scrollProgress >= 0.88 || targetIndex >= maxFrameIndex - 1) {
+        displayIndexRef.current = maxFrameIndex;
         advanceToNextStep();
       }
 
@@ -169,8 +181,7 @@ const TerminalSimulator = ({ step, setStep }) => {
     images,
     preloadAround,
     getTargetIndex,
-    viewportHeight,
-    scrollSpacerHeight,
+    getMaxScrollTop,
     maxFrameIndex,
     advanceToNextStep,
   ]);
@@ -213,14 +224,16 @@ const TerminalSimulator = ({ step, setStep }) => {
               <p>{renderText}</p>
             </div>
 
-            <div className="absolute phone:bottom-24 bottom-12 left-0 right-0 flex justify-center pointer-events-none">
-              <div
-                className={`mt-4 p-4 border-white border-2 font-mono transition-opacity duration-1000 ${
+            <div className="absolute phone:bottom-24 bottom-12 left-0 right-0 flex justify-center">
+              <button
+                type="button"
+                onClick={advanceToNextStep}
+                className={`mt-4 p-4 border-white border-2 font-mono transition-opacity duration-1000 pointer-events-auto bg-transparent text-white hover:bg-white/10 ${
                   buttonVisible ? "opacity-100" : "opacity-0"
                 }`}
               >
                 Scroll to Proceed
-              </div>
+              </button>
             </div>
           </div>
         </>
@@ -230,3 +243,5 @@ const TerminalSimulator = ({ step, setStep }) => {
 };
 
 export default TerminalSimulator;
+
+
