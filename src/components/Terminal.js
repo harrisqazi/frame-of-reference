@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 
-const introductionText = `Hello,
+const introductionText = `Remember that idea that you had,
 
-Its time to focus on what you want. Whatever you want.
+The one you let go for something more realistic.
 
-Take a moment and imagine it with all 5 senses.
+Bring it back for a moment.
 
-The sounds around you, the feeling at your fingertips, the smell in the air, the taste in your mouth, the sight of the room surrounding you.
+Hold onto it with all 5 senses. The feeling of having accomplished that dream, the smell after having created it, the sound of the dream being realized...
 
-Now take it to the source.`;
+Now take it to the source`;
 
 const SENSORY_START = introductionText.indexOf(
-  "The sounds around you"
+  "The feeling of having accomplished"
 );
-const SENSORY_END = introductionText.indexOf("Now take it to the source.");
+const SENSORY_END = introductionText.indexOf("Now take it to the source");
 
 const getCharDelay = (index) => {
   if (index >= SENSORY_START && index < SENSORY_END) return 48;
@@ -27,9 +27,11 @@ const TerminalSimulator = ({ step, setStep }) => {
 
   const [scrollPosition, setScrollPosition] = useState(0);
   const [images, setImages] = useState([]);
+  const [viewportHeight, setViewportHeight] = useState(800);
   const displayIndexRef = useRef(0);
   const lastFrameTimeRef = useRef(0);
   const rafRef = useRef(null);
+  const hasAdvancedRef = useRef(false);
 
   const imgRef = useRef();
 
@@ -37,8 +39,17 @@ const TerminalSimulator = ({ step, setStep }) => {
   const sampledImages = Math.floor(totalImages / 4);
   const scrollAmountPerImage = 20;
   const stepSize = Math.floor(totalImages / sampledImages);
-  const maxIndexAdvancePerSecond = 14;
-  const scrollSpacerHeight = sampledImages * scrollAmountPerImage;
+  const maxIndexAdvancePerSecond = 45;
+  const maxFrameIndex = sampledImages - 1;
+  const scrollSpacerHeight =
+    maxFrameIndex * scrollAmountPerImage + viewportHeight;
+
+  useEffect(() => {
+    const updateViewport = () => setViewportHeight(window.innerHeight);
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
 
   useEffect(() => {
     const initialDelayId = setTimeout(() => setDelayComplete(true), 1000);
@@ -73,10 +84,22 @@ const TerminalSimulator = ({ step, setStep }) => {
     setImages(loadedImages);
   }, [stepSize]);
 
+  const getScrollTop = () =>
+    window.pageYOffset ||
+    document.documentElement.scrollTop ||
+    document.body.scrollTop ||
+    0;
+
+  const getTargetIndex = useCallback(() => {
+    const scrollTop = getScrollTop();
+    const index = Math.ceil(scrollTop / scrollAmountPerImage);
+    return Math.min(maxFrameIndex, Math.max(0, index));
+  }, [maxFrameIndex, scrollAmountPerImage]);
+
   const preloadAround = useCallback(
     (index) => {
       if (!images.length) return;
-      const lookahead = 8;
+      const lookahead = 12;
       for (let offset = 0; offset <= lookahead; offset++) {
         const target = index + offset;
         if (target < images.length) {
@@ -88,6 +111,13 @@ const TerminalSimulator = ({ step, setStep }) => {
     [images]
   );
 
+  const advanceToNextStep = useCallback(() => {
+    if (hasAdvancedRef.current) return;
+    hasAdvancedRef.current = true;
+    setStep(1);
+    window.scrollTo(0, 0);
+  }, [setStep]);
+
   useEffect(() => {
     if (!images.length) return;
 
@@ -96,11 +126,7 @@ const TerminalSimulator = ({ step, setStep }) => {
       const elapsed = timestamp - lastFrameTimeRef.current;
       lastFrameTimeRef.current = timestamp;
 
-      const targetIndex = Math.min(
-        sampledImages - 1,
-        Math.max(0, Math.ceil(window.pageYOffset / scrollAmountPerImage))
-      );
-
+      const targetIndex = getTargetIndex();
       const maxAdvance = Math.max(
         1,
         Math.floor((elapsed / 1000) * maxIndexAdvancePerSecond)
@@ -121,8 +147,15 @@ const TerminalSimulator = ({ step, setStep }) => {
       setScrollPosition(displayIndexRef.current);
       preloadAround(displayIndexRef.current);
 
-      if (displayIndexRef.current === sampledImages - 1) {
-        setStep(1);
+      const scrollTop = getScrollTop();
+      const atScrollEnd =
+        scrollTop + viewportHeight >= scrollSpacerHeight - 40;
+      const atFinalFrame = targetIndex >= maxFrameIndex;
+      const displayCaughtUp =
+        displayIndexRef.current >= maxFrameIndex - 2;
+
+      if (atScrollEnd || (atFinalFrame && displayCaughtUp)) {
+        advanceToNextStep();
       }
 
       rafRef.current = requestAnimationFrame(tick);
@@ -132,7 +165,15 @@ const TerminalSimulator = ({ step, setStep }) => {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [images, preloadAround, sampledImages, scrollAmountPerImage, setStep]);
+  }, [
+    images,
+    preloadAround,
+    getTargetIndex,
+    viewportHeight,
+    scrollSpacerHeight,
+    maxFrameIndex,
+    advanceToNextStep,
+  ]);
 
   useEffect(() => {
     if (imgRef.current && images[scrollPosition]) {
@@ -140,7 +181,7 @@ const TerminalSimulator = ({ step, setStep }) => {
     }
   }, [scrollPosition, images]);
 
-  const opacity = 1 - scrollPosition / Math.max(sampledImages - 1, 1);
+  const opacity = 1 - scrollPosition / Math.max(maxFrameIndex, 1);
 
   const renderText = typedText.split("\n").map((item, key) => (
     <span key={key}>
@@ -157,7 +198,7 @@ const TerminalSimulator = ({ step, setStep }) => {
       {step === 0 && (
         <>
           <div style={{ height: `${scrollSpacerHeight}px` }} />
-          <div className="fixed w-screen h-screen z-20 text-white overflow-hidden">
+          <div className="fixed inset-0 z-20 pointer-events-none text-white overflow-hidden">
             <img
               ref={imgRef}
               alt=""
@@ -166,13 +207,13 @@ const TerminalSimulator = ({ step, setStep }) => {
           </div>
           <div
             style={{ opacity }}
-            className="fixed h-screen w-full p-12 flex justify-center"
+            className="fixed inset-0 z-30 pointer-events-none p-12 flex justify-center"
           >
-            <div className="bg-black text-white w-[400px] pt-8 max-w-11/12 font-mono">
+            <div className="bg-black text-white w-[400px] pt-8 max-w-11/12 font-mono pointer-events-none">
               <p>{renderText}</p>
             </div>
 
-            <div className="absolute phone:bottom-24 bottom-12 flex justify-center">
+            <div className="absolute phone:bottom-24 bottom-12 left-0 right-0 flex justify-center pointer-events-none">
               <div
                 className={`mt-4 p-4 border-white border-2 font-mono transition-opacity duration-1000 ${
                   buttonVisible ? "opacity-100" : "opacity-0"
