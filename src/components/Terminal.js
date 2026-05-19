@@ -1,29 +1,32 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 
-const introductionText = `Remember that idea that you had,
-
-The one you let go for something more realistic.
-
-Bring it back for a moment.
-
-Hold onto it with all 5 senses. The feeling of having accomplished that dream, the smell after having created it, the taste of gratitude on your tongue, the sound of the dream being realized...
-
-Now take it to the source  `;
-
-const SENSORY_START = introductionText.indexOf(
-  "The feeling of having accomplished"
-);
-const SENSORY_END = introductionText.indexOf("Now take it to the source");
-
-const getCharDelay = (index) => {
-  if (index >= SENSORY_START && index < SENSORY_END) return 48;
-  return 32;
-};
+const SCRIPT = [
+  { action: "type", text: "Remember that dream you had", delay: 36 },
+  { action: "countdown", steps: [1, 2, 3], interval: 1000 },
+  {
+    action: "type",
+    text: "\n\nThe one you let go for something more realistic",
+    delay: 36,
+  },
+  { action: "wait", ms: 3000 },
+  { action: "type", text: "\n\nBring it back for a moment.", delay: 36 },
+  { action: "wait", ms: 2000 },
+  { action: "type", text: "\n\nHold onto it with all 5 senses:\n\n", delay: 36 },
+  {
+    action: "type",
+    text: "the feeling of having accomplished that dream, the smell after having created it, the taste of gratitude on your tongue, the sound of the dream being realized",
+    delay: 22,
+  },
+  { action: "dots", count: 4, interval: 1000 },
+  { action: "wait", ms: 800 },
+  { action: "type", text: "\n\nNow take it to the source.", delay: 55 },
+];
 
 const TerminalSimulator = ({ step, setStep }) => {
   const [typedText, setTypedText] = useState("");
+  const [countdownLabel, setCountdownLabel] = useState("");
   const [buttonVisible, setButtonVisible] = useState(false);
-  const [delayComplete, setDelayComplete] = useState(false);
+  const [scriptReady, setScriptReady] = useState(false);
 
   const [scrollPosition, setScrollPosition] = useState(0);
   const [images, setImages] = useState([]);
@@ -32,6 +35,7 @@ const TerminalSimulator = ({ step, setStep }) => {
   const lastFrameTimeRef = useRef(0);
   const rafRef = useRef(null);
   const hasAdvancedRef = useRef(false);
+  const scriptRunIdRef = useRef(0);
 
   const imgRef = useRef();
 
@@ -61,25 +65,79 @@ const TerminalSimulator = ({ step, setStep }) => {
   }, []);
 
   useEffect(() => {
-    const initialDelayId = setTimeout(() => setDelayComplete(true), 1000);
+    const initialDelayId = setTimeout(() => setScriptReady(true), 800);
     return () => clearTimeout(initialDelayId);
   }, []);
 
   useEffect(() => {
-    if (!delayComplete) return;
+    if (!scriptReady) return;
 
-    if (typedText === introductionText) {
-      setButtonVisible(true);
-      return;
-    }
+    const runId = ++scriptRunIdRef.current;
+    let cancelled = false;
 
-    const nextIndex = typedText.length;
-    const timerId = setTimeout(() => {
-      setTypedText(introductionText.slice(0, nextIndex + 1));
-    }, getCharDelay(nextIndex));
+    const wait = (ms) =>
+      new Promise((resolve) => {
+        setTimeout(resolve, ms);
+      });
 
-    return () => clearTimeout(timerId);
-  }, [delayComplete, typedText]);
+    const runScript = async () => {
+      let content = "";
+
+      const setContent = (next) => {
+        content = next;
+        if (!cancelled && scriptRunIdRef.current === runId) {
+          setTypedText(content);
+        }
+      };
+
+      const typeChars = async (text, delay) => {
+        for (let i = 0; i < text.length; i++) {
+          if (cancelled || scriptRunIdRef.current !== runId) return;
+          content += text[i];
+          setContent(content);
+          await wait(delay);
+        }
+      };
+
+      for (const segment of SCRIPT) {
+        if (cancelled || scriptRunIdRef.current !== runId) return;
+
+        if (segment.action === "type") {
+          setCountdownLabel("");
+          await typeChars(segment.text, segment.delay);
+        } else if (segment.action === "countdown") {
+          for (const n of segment.steps) {
+            if (cancelled || scriptRunIdRef.current !== runId) return;
+            setCountdownLabel(String(n));
+            await wait(segment.interval);
+          }
+          setCountdownLabel("");
+        } else if (segment.action === "wait") {
+          setCountdownLabel("");
+          await wait(segment.ms);
+        } else if (segment.action === "dots") {
+          setCountdownLabel("");
+          const base = content;
+          for (let d = 1; d <= segment.count; d++) {
+            if (cancelled || scriptRunIdRef.current !== runId) return;
+            setContent(base + ".".repeat(d));
+            await wait(segment.interval);
+          }
+          content = base + ".".repeat(segment.count);
+        }
+      }
+
+      if (!cancelled && scriptRunIdRef.current === runId) {
+        setButtonVisible(true);
+      }
+    };
+
+    runScript();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scriptReady]);
 
   useEffect(() => {
     const loadedImages = [];
@@ -194,22 +252,25 @@ const TerminalSimulator = ({ step, setStep }) => {
 
   const opacity = 1 - scrollPosition / Math.max(maxFrameIndex, 1);
 
-  const renderText = typedText.split("\n").map((item, key) => (
-    <span key={key}>
-      {item}
-      {key === typedText.split("\n").length - 1 && (
-        <span className="text-cyan-500 ml-1">_</span>
-      )}
-      <br />
-    </span>
-  ));
+  const renderText = () => {
+    const lines = typedText.split("\n");
+    return lines.map((item, key) => (
+      <span key={key}>
+        {item}
+        {key === lines.length - 1 && !countdownLabel && (
+          <span className="text-cyan-500 ml-1">_</span>
+        )}
+        <br />
+      </span>
+    ));
+  };
 
   return (
     <>
       {step === 0 && (
         <>
           <div style={{ height: `${scrollSpacerHeight}px` }} />
-          <div className="fixed inset-0 z-20 pointer-events-none text-white overflow-hidden">
+          <div className="fixed w-screen h-screen z-20 text-white overflow-hidden">
             <img
               ref={imgRef}
               alt=""
@@ -218,18 +279,27 @@ const TerminalSimulator = ({ step, setStep }) => {
           </div>
           <div
             style={{ opacity }}
-            className="fixed inset-0 z-30 pointer-events-none p-12 flex justify-center"
+            className="fixed h-screen w-full p-12 flex justify-center pointer-events-none"
           >
-            <div className="bg-black text-white w-[400px] pt-8 max-w-11/12 font-mono pointer-events-none">
-              <p>{renderText}</p>
+            <div className="text-white w-[400px] pt-8 max-w-11/12 font-mono">
+              <p>
+                {renderText()}
+                {countdownLabel && (
+                  <span className="block mt-6 text-2xl text-white/90">
+                    {countdownLabel}
+                  </span>
+                )}
+              </p>
             </div>
 
-            <div className="absolute phone:bottom-24 bottom-12 left-0 right-0 flex justify-center">
+            <div className="absolute phone:bottom-24 bottom-12 w-full flex justify-center pointer-events-auto">
               <button
                 type="button"
                 onClick={advanceToNextStep}
-                className={`mt-4 p-4 border-white border-2 font-mono transition-opacity duration-1000 pointer-events-auto bg-transparent text-white hover:bg-white/10 ${
-                  buttonVisible ? "opacity-100" : "opacity-0"
+                className={`mt-4 p-4 border-white border-2 font-mono transition-opacity duration-1000 bg-transparent text-white hover:bg-white/10 ${
+                  buttonVisible
+                    ? "opacity-100"
+                    : "opacity-0 pointer-events-none"
                 }`}
               >
                 Scroll to Proceed
@@ -243,5 +313,4 @@ const TerminalSimulator = ({ step, setStep }) => {
 };
 
 export default TerminalSimulator;
-
 
