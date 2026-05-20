@@ -1,25 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 
 const SCRIPT = [
-  { action: "type", text: "Remember that dream you had", delay: 36 },
-  { action: "countdown", steps: [1, 2, 3], interval: 1000 },
+  { action: "type", text: "Remember that dream you had", delay: 40 },
+  { action: "type", text: "\n\nBring it back for a moment.", delay: 40 },
+  { action: "wait", ms: 800 },
+  { action: "type", text: "\n\nImagine it with all 5 senses:\n\n", delay: 40 },
   {
     action: "type",
-    text: "\n\nThe one you let go for something more realistic",
-    delay: 36,
-  },
-  { action: "wait", ms: 3000 },
-  { action: "type", text: "\n\nBring it back for a moment.", delay: 36 },
-  { action: "wait", ms: 2000 },
-  { action: "type", text: "\n\nImagine it with all 5 senses:\n\n", delay: 36 },
-  {
-    action: "type",
-    text: "the feeling of having accomplished that dream, \nthe smell after having created it, \nthe taste of gratitude on your tongue, \nthe sight of your vision becoming reality, \nthe sounds in the room after completing your quest",
+    text: "The feeling of having accomplished that dream,\nthe smell in the room,\nthe taste of gratitude on your tongue,\nthe sound of your vision realized ",
     delay: 22,
   },
-  { action: "dots", count: 4, interval: 1000 },
-  { action: "wait", ms: 800 },
-  { action: "type", text: "\n\nNow take it to the source.", delay: 55 },
+  { action: "dots", count: 3, interval: 900 },
+  { action: "wait", ms: 500 },
+  { action: "type", text: "\n\nNow take it to the source.", delay: 50 },
 ];
 
 const TerminalSimulator = ({ step, setStep }) => {
@@ -285,4 +278,3 @@ const TerminalSimulator = ({ step, setStep }) => {
 };
 
 export default TerminalSimulator;
-
