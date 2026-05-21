@@ -1,10 +1,27 @@
 import React, { useEffect, useState, useRef } from "react";
 import { BRANCH_QUESTIONS } from "@/data/manifestationQuestions";
 
-const EXAMPLE_IDEAS = [
-  "a neighborhood tool-swap that cuts waste",
-  "a calm app for first-time founders",
-  "a local transit idea you shelved last year",
+const CYCLING_IDEAS = [
+  "Recycling infrastructure in Guadalajara",
+  "Pacific Islander Venture Fund",
+  "A new app or software tool to help people manage their finances",
+  "A design for a new product, such as a piece of furniture or a piece of jewelry",
+  "A new social media platform that connects people with similar interests",
+  "A service that helps people with home organization and decluttering",
+  "An API that allows businesses to integrate with a popular third-party tool",
+  "A solution for reducing plastic waste in the environment",
+  "A local solution for improving transportation in a specific city or town",
+  "A global solution for addressing climate change.",
+  "A mobile app that helps people track their water intake throughout the day",
+  "A recipe for a vegan and gluten-free chocolate cake that doesn't sacrifice taste",
+  "A proposal for a startup that provides affordable, healthy meal delivery to college campuses",
+  "A design for a new ergonomic office chair that improves posture and reduces back pain",
+  "A social media platform that focuses on connecting pet owners with each other and with pet-friendly businesses",
+  "A service that helps busy parents organize their family schedules and tasks",
+  "An API that allows businesses to access real-time data on weather patterns and climate conditions in their area",
+  "A solution for turning plastic waste into eco-friendly building materials",
+  "A local solution for improving bike infrastructure in a specific neighborhood or district",
+  "A global solution for reducing food waste by optimizing supply chains and reducing spoilage during transportation.",
 ];
 
 const CATEGORIES = [
@@ -38,7 +55,10 @@ function useTypewriter(text, active, speed = 28) {
 export default function TypeformFlow({ setStep }) {
   const [phase, setPhase] = useState("intro");
   const [introTitleDone, setIntroTitleDone] = useState(false);
-  const [exampleIdx, setExampleIdx] = useState(0);
+  const [ideaCarouselText, setIdeaCarouselText] = useState("");
+  const [ideaIndex, setIdeaIndex] = useState(0);
+  const [ideaDeleting, setIdeaDeleting] = useState(false);
+  const [ideaWaiting, setIdeaWaiting] = useState(false);
 
   const [idea, setIdea] = useState("");
   const [category, setCategory] = useState(null);
@@ -85,11 +105,41 @@ export default function TypeformFlow({ setStep }) {
 
   useEffect(() => {
     if (!introTitleDone || phase !== "intro") return;
-    const id = setInterval(() => {
-      setExampleIdx((i) => (i + 1) % EXAMPLE_IDEAS.length);
-    }, 420);
-    return () => clearInterval(id);
-  }, [introTitleDone, phase]);
+
+    const currentIdea = ideaIndex % CYCLING_IDEAS.length;
+    const fullText = CYCLING_IDEAS[currentIdea];
+
+    if (ideaWaiting) return;
+
+    const typeDelay = ideaDeleting ? 8 : 20;
+    const pauseAfterType = 650;
+
+    const timerId = setTimeout(() => {
+      if (!ideaDeleting && ideaCarouselText === fullText) {
+        setIdeaWaiting(true);
+        setTimeout(() => {
+          setIdeaWaiting(false);
+          setIdeaDeleting(true);
+        }, pauseAfterType);
+      } else if (ideaDeleting && ideaCarouselText === "") {
+        setIdeaDeleting(false);
+        setIdeaIndex((prev) => (prev + 1) % CYCLING_IDEAS.length);
+      } else {
+        setIdeaCarouselText((prev) =>
+          ideaDeleting ? prev.slice(0, -1) : prev + fullText[prev.length]
+        );
+      }
+    }, typeDelay);
+
+    return () => clearTimeout(timerId);
+  }, [
+    introTitleDone,
+    phase,
+    ideaCarouselText,
+    ideaDeleting,
+    ideaWaiting,
+    ideaIndex,
+  ]);
 
   useEffect(() => {
     if (phase !== "qa" || !activeQuestion) return;
@@ -229,7 +279,7 @@ export default function TypeformFlow({ setStep }) {
       console.error(err);
     }
     setSubmitting(false);
-    setTimeout(() => setStep(7), 2800);
+    setTimeout(() => setStep(7), 4200);
   };
 
   return (
@@ -240,7 +290,13 @@ export default function TypeformFlow({ setStep }) {
         }`}
       >
         {sendSplash && (
-          <div className="manifestation-coin" aria-hidden />
+          <>
+            <div className="manifestation-water-surface" aria-hidden />
+            <div className="manifestation-coin" aria-hidden />
+            <div className="manifestation-ripple manifestation-ripple-1" aria-hidden />
+            <div className="manifestation-ripple manifestation-ripple-2" aria-hidden />
+            <div className="manifestation-ripple manifestation-ripple-3" aria-hidden />
+          </>
         )}
       </div>
 
@@ -253,8 +309,8 @@ export default function TypeformFlow({ setStep }) {
             )}
           </p>
           {introTitleDone && (
-            <div className="mt-4 text-sm text-gray-500 min-h-[4rem]">
-              <span>{EXAMPLE_IDEAS[exampleIdx]}</span>
+            <div className="mt-4 text-sm text-gray-500 min-h-[5rem]">
+              <span>{ideaCarouselText}</span>
               <span className="text-cyan-600 ml-1">_</span>
             </div>
           )}
