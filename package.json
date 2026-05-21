@@ -14,6 +14,7 @@
     "eslint": "8.44.0",
     "eslint-config-next": "13.4.7",
     "googleapis": "^120.0.0",
+    "nodemailer": "^6.9.13",
     "next": "13.4.7",
     "postcss": "8.4.24",
     "react": "18.2.0",

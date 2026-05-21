@@ -1,58 +1,81 @@
 # Email submissions to admin@pooly.org
 
-The site sends you an email on every submission with this format:
+Use **your normal Gmail** (recommended). No Resend account required.
+
+---
+
+## Option A: Gmail (your regular email)
+
+The site sends mail **through your Gmail** using an **App Password** (not your normal login password).
+
+### 1. Create a Gmail App Password
+
+1. Use a Google account you check often (can be the same as admin@pooly.org if that’s Gmail, or any Gmail you own).
+2. Turn on **2-Step Verification** for that Google account:  
+   [https://myaccount.google.com/security](https://myaccount.google.com/security)
+3. Go to **App passwords**:  
+   [https://myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+4. Create one named `Frame of Reference` → copy the **16-character password** (no spaces).
+
+### 2. Add to Vercel (not GitHub)
+
+If you already use `gmail_job_applier.py`, reuse the **same** Gmail + app password:
+
+| Vercel variable | Same as in gmail_job_applier.py |
+|-----------------|----------------------------------|
+| `SMTP_USER` or `GMAIL_USER` | `GMAIL_ADDRESS` |
+| `SMTP_PASS` or `GMAIL_APP_PASSWORD` | `GMAIL_APP_PASSWORD` (**remove spaces** when pasting) |
+| `SMTP_HOST` | `smtp.gmail.com` (optional — auto for Gmail) |
+| `SMTP_PORT` | `465` (optional — auto for Gmail; matches your script) |
+| `NOTIFY_EMAIL` | `admin@pooly.org` (who receives form submissions) |
+
+You do **not** need Resend if Gmail is set.
+
+Optional: `SMTP_FROM` — defaults to your Gmail address (same as `GMAIL_ADDRESS`).
+
+### 3. Redeploy
+
+**Deployments → Redeploy** production, then submit a test form.
+
+You should receive an email at **NOTIFY_EMAIL**. It will look like it came **from your Gmail** (Frame of Reference).
+
+---
+
+## Option B: Resend (optional)
+
+Only if you prefer Resend instead of Gmail:
+
+- `RESEND_API_KEY`
+- `RESEND_FROM`
+- `NOTIFY_EMAIL`
+
+Gmail is tried **first**; Resend is only used if Gmail env vars are missing.
+
+---
+
+## GitHub vs Vercel
+
+| GitHub | Vercel |
+|--------|--------|
+| Code only | **Put SMTP_USER and SMTP_PASS here** |
+| Never commit passwords | Redeploy after saving |
+
+---
+
+## Email format
 
 ```
 What do you want to create?
-[their idea]
+[idea]
 
 Category:
 Product
 
-Question: What is the problem you are trying to solve?
+Question: What is your name?
 Answer: ...
 
-Question: What is your name?
+Question: What is your email?
 Answer: ...
 ```
 
-## GitHub vs Vercel
-
-| Where | What |
-|--------|------|
-| **GitHub** | Stores the code only. You cannot put email passwords or API keys here (they would be public). |
-| **Vercel** | Runs the live site. **You must add secrets here** so `/api/manifestation` can send mail. |
-
-After you add variables in Vercel, click **Redeploy** so the live site picks them up.
-
-## Setup (about 10 minutes) — Resend
-
-1. Sign up at [https://resend.com](https://resend.com) (free tier is fine).
-2. Create an API key: **API Keys → Create**.
-3. In [Vercel](https://vercel.com), open your **frame-of-reference** project.
-4. Go to **Settings → Environment Variables** and add:
-
-| Name | Value |
-|------|--------|
-| `RESEND_API_KEY` | `re_...` (your Resend API key) |
-| `RESEND_FROM` | `Frame of Reference <onboarding@resend.dev>` *(for testing)* or your verified domain later |
-| `NOTIFY_EMAIL` | `admin@pooly.org` |
-
-5. **Deployments → … → Redeploy** the latest production deployment.
-6. Submit a test on the live site. You should receive email at **admin@pooly.org**.
-
-### Resend testing note
-
-With `onboarding@resend.dev` as the sender, Resend may only deliver to the email address you used to sign up for Resend until you verify a custom domain. For production, verify a domain in Resend and set:
-
-`RESEND_FROM=Frame of Reference <notifications@yourdomain.com>`
-
-## Optional: Google Sheets backup
-
-If you already use Google Sheets from the old forms, you can also set:
-
-- `GOOGLE_CLIENT_EMAIL`
-- `GOOGLE_PRIVATE_KEY`
-- `SPREADSHEET_ID`
-
-Submissions will append to a sheet tab as well as email (when Resend is configured).
+Drawing attached as `sketch.png` when provided.

@@ -277,7 +277,7 @@ export default function TypeformFlow({ setStep }) {
       .then((data) => {
         if (!data.emailed && !data.sheet) {
           console.warn(
-            "Submission saved locally only — configure Google Sheets or Resend on Vercel. See .env.example",
+            "Email not sent — add SMTP_USER + SMTP_PASS (Gmail app password) in Vercel. See EMAIL_SETUP.md",
             data
           );
         }

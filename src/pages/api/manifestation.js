@@ -1,9 +1,14 @@
 /**
  * POST /api/manifestation
- * Emails admin@pooly.org (or NOTIFY_EMAIL) when RESEND_API_KEY is set in Vercel env.
- * Optional: Google Sheets backup when GOOGLE_* env vars are set.
+ *
+ * Email (pick one in Vercel):
+ * 1. Your normal Gmail — SMTP_USER + SMTP_PASS (Gmail App Password)  ← easiest
+ * 2. Resend — RESEND_API_KEY (optional fallback)
+ *
+ * Submissions go to NOTIFY_EMAIL (default admin@pooly.org).
  */
 import { google } from "googleapis";
+import nodemailer from "nodemailer";
 
 const DEFAULT_NOTIFY_EMAIL = "admin@pooly.org";
 
@@ -46,6 +51,128 @@ function buildEmailText(body) {
   );
 
   return lines.join("\n");
+}
+
+function getSmtpConfig() {
+  const user = process.env.SMTP_USER || process.env.GMAIL_USER;
+  const pass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
+  if (!user || !pass) return null;
+
+  const isGmail = user.includes("@gmail.com");
+  const host = process.env.SMTP_HOST || (isGmail ? "smtp.gmail.com" : "smtp.gmail.com");
+  // gmail_job_applier.py uses SMTP_SSL on port 465
+  const port = Number(process.env.SMTP_PORT || (isGmail ? 465 : 587));
+
+  return {
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+    from: process.env.SMTP_FROM || user,
+  };
+}
+
+function getMailAttachments(body) {
+  if (!body.drawingDataUrl || !body.drawingDataUrl.includes(",")) return [];
+  return [
+    {
+      filename: "sketch.png",
+      content: Buffer.from(body.drawingDataUrl.split(",")[1], "base64"),
+      contentType: "image/png",
+    },
+  ];
+}
+
+async function sendSmtpEmail(body) {
+  const smtp = getSmtpConfig();
+  if (!smtp) {
+    return {
+      ok: false,
+      reason:
+        "Gmail not configured. Set SMTP_USER + SMTP_PASS in Vercel (see EMAIL_SETUP.md).",
+    };
+  }
+
+  const to = getNotifyEmail();
+  const text = buildEmailText(body);
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host: smtp.host,
+      port: smtp.port,
+      secure: smtp.secure,
+      auth: smtp.auth,
+    });
+
+    await transporter.sendMail({
+      from: `"Frame of Reference" <${smtp.from}>`,
+      to,
+      subject: `New submission — ${body.idea?.slice(0, 50) || "Frame of Reference"}`,
+      text,
+      attachments: getMailAttachments(body),
+    });
+
+    return { ok: true, to, method: "gmail" };
+  } catch (e) {
+    return { ok: false, reason: `Gmail SMTP error: ${e.message}` };
+  }
+}
+
+async function sendResendEmail(body) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    return { ok: false, reason: "Resend not configured" };
+  }
+
+  const from =
+    process.env.RESEND_FROM || "Frame of Reference <onboarding@resend.dev>";
+  const to = getNotifyEmail();
+  const text = buildEmailText(body);
+
+  const payload = {
+    from,
+    to: [to],
+    subject: `New submission — ${body.idea?.slice(0, 50) || "Frame of Reference"}`,
+    text,
+  };
+
+  if (body.drawingDataUrl && body.drawingDataUrl.includes(",")) {
+    payload.attachments = [
+      {
+        filename: "sketch.png",
+        content: body.drawingDataUrl.split(",")[1],
+      },
+    ];
+  }
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text();
+    return { ok: false, reason: `Resend error: ${res.status} ${errBody}` };
+  }
+
+  return { ok: true, to, method: "resend" };
+}
+
+async function sendSubmissionEmail(body) {
+  const smtpResult = await sendSmtpEmail(body);
+  if (smtpResult.ok) return smtpResult;
+
+  const resendResult = await sendResendEmail(body);
+  if (resendResult.ok) return resendResult;
+
+  return {
+    ok: false,
+    reason: smtpResult.reason || resendResult.reason,
+  };
 }
 
 function sheetTabForCategory(category) {
@@ -108,54 +235,6 @@ async function appendSheetRow(body) {
   return { ok: false, reason: lastError || "Could not append to sheet" };
 }
 
-async function sendResendEmail(body) {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) {
-    return {
-      ok: false,
-      reason:
-        "RESEND_API_KEY is not set. Add it in Vercel → Settings → Environment Variables (see EMAIL_SETUP.md).",
-    };
-  }
-
-  const from =
-    process.env.RESEND_FROM || "Frame of Reference <onboarding@resend.dev>";
-  const to = getNotifyEmail();
-  const text = buildEmailText(body);
-
-  const payload = {
-    from,
-    to: [to],
-    subject: `New submission — ${body.idea?.slice(0, 50) || "Frame of Reference"}`,
-    text,
-  };
-
-  if (body.drawingDataUrl && body.drawingDataUrl.includes(",")) {
-    payload.attachments = [
-      {
-        filename: "sketch.png",
-        content: body.drawingDataUrl.split(",")[1],
-      },
-    ];
-  }
-
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const errBody = await res.text();
-    return { ok: false, reason: `Resend error: ${res.status} ${errBody}` };
-  }
-
-  return { ok: true, to };
-}
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -165,7 +244,7 @@ export default async function handler(req, res) {
   const body =
     typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-  const emailResult = await sendResendEmail(body);
+  const emailResult = await sendSubmissionEmail(body);
   const sheetResult = await appendSheetRow(body);
 
   const emailed = emailResult.ok === true;
@@ -175,12 +254,13 @@ export default async function handler(req, res) {
     ok: emailed || sheet,
     emailed,
     sheet,
+    method: emailResult.method || null,
     sentTo: emailed ? emailResult.to : null,
     sheetTab: sheetResult.tab || null,
     emailError: emailResult.reason || null,
     sheetError: sheetResult.reason || null,
     hint: !emailed
-      ? "Email requires RESEND_API_KEY in Vercel (not in GitHub). See EMAIL_SETUP.md."
+      ? "Set SMTP_USER + SMTP_PASS (Gmail app password) in Vercel. See EMAIL_SETUP.md."
       : null,
   });
 }
