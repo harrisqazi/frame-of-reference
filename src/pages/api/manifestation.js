@@ -1,40 +1,51 @@
 /**
  * POST /api/manifestation
- *
- * Sends to (when env vars are set on Vercel):
- * 1. Google Sheet — GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, SPREADSHEET_ID
- *    (tries tab: category name, then Manifestation, then Product)
- * 2. Email — RESEND_API_KEY + RESEND_FROM → NOTIFY_EMAIL (default admin@pooly.org)
+ * Emails admin@pooly.org (or NOTIFY_EMAIL) when RESEND_API_KEY is set in Vercel env.
+ * Optional: Google Sheets backup when GOOGLE_* env vars are set.
  */
 import { google } from "googleapis";
 
 const DEFAULT_NOTIFY_EMAIL = "admin@pooly.org";
 
 function getNotifyEmail() {
-  return process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || DEFAULT_NOTIFY_EMAIL;
+  return (
+    process.env.NOTIFY_EMAIL || process.env.ADMIN_EMAIL || DEFAULT_NOTIFY_EMAIL
+  );
 }
 
 function buildEmailText(body) {
-  const labels =
-    body.category === "Something else"
-      ? ["Name", "Email"]
-      : null;
-
-  const answerLines = (body.branchAnswers || []).map((a, i) => {
-    const label = labels && labels[i] ? `${labels[i]}: ` : `Answer ${i + 1}: `;
-    return `${label}${a || "(skipped)"}`;
-  });
-
-  return [
+  const lines = [
     "New Frame of Reference submission",
     "",
-    `Idea: ${body.idea || ""}`,
-    `Category: ${body.category || ""}`,
+    "What do you want to create?",
+    body.idea || "(skipped)",
     "",
-    ...answerLines,
+    "Category:",
+    body.category || "(not selected)",
     "",
-    body.drawingDataUrl ? "Drawing: attached as sketch.png" : "Drawing: (skipped)",
-  ].join("\n");
+  ];
+
+  const questions = body.branchQuestions || [];
+  const answers = body.branchAnswers || [];
+
+  if (questions.length === 0 && answers.length === 0) {
+    lines.push("(No follow-up questions for this category)", "");
+  } else {
+    const count = Math.max(questions.length, answers.length);
+    for (let i = 0; i < count; i++) {
+      lines.push(`Question: ${questions[i] || `Question ${i + 1}`}`);
+      lines.push(`Answer: ${answers[i] ?? "(skipped)"}`);
+      lines.push("");
+    }
+  }
+
+  lines.push(
+    body.drawingDataUrl
+      ? "Drawing: attached as sketch.png"
+      : "Drawing: (skipped)"
+  );
+
+  return lines.join("\n");
 }
 
 function sheetTabForCategory(category) {
@@ -48,7 +59,7 @@ async function appendSheetRow(body) {
     !process.env.GOOGLE_PRIVATE_KEY ||
     !process.env.SPREADSHEET_ID
   ) {
-    return { ok: false, reason: "Google Sheets env vars not configured" };
+    return { ok: false, reason: "Google Sheets not configured" };
   }
 
   const jwt = new google.auth.JWT(
@@ -63,7 +74,12 @@ async function appendSheetRow(body) {
     new Date().toISOString(),
     body.idea || "",
     body.category || "",
-    JSON.stringify(body.branchAnswers || []),
+    JSON.stringify(
+      (body.branchQuestions || []).map((q, i) => ({
+        q,
+        a: body.branchAnswers?.[i] ?? "",
+      }))
+    ),
     body.drawingDataUrl ? "yes" : "no",
   ];
 
@@ -98,7 +114,7 @@ async function sendResendEmail(body) {
     return {
       ok: false,
       reason:
-        "RESEND_API_KEY not set on server — add it in Vercel Project → Settings → Environment Variables",
+        "RESEND_API_KEY is not set. Add it in Vercel → Settings → Environment Variables (see EMAIL_SETUP.md).",
     };
   }
 
@@ -110,7 +126,7 @@ async function sendResendEmail(body) {
   const payload = {
     from,
     to: [to],
-    subject: "New manifestation — Frame of Reference",
+    subject: `New submission — ${body.idea?.slice(0, 50) || "Frame of Reference"}`,
     text,
   };
 
@@ -149,23 +165,22 @@ export default async function handler(req, res) {
   const body =
     typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-  const sheetResult = await appendSheetRow(body);
   const emailResult = await sendResendEmail(body);
+  const sheetResult = await appendSheetRow(body);
 
-  const sheet = sheetResult.ok === true;
   const emailed = emailResult.ok === true;
+  const sheet = sheetResult.ok === true;
 
   return res.status(200).json({
-    ok: sheet || emailed,
-    sheet,
+    ok: emailed || sheet,
     emailed,
+    sheet,
+    sentTo: emailed ? emailResult.to : null,
     sheetTab: sheetResult.tab || null,
-    notifyEmail: getNotifyEmail(),
-    sheetError: sheetResult.reason || null,
     emailError: emailResult.reason || null,
-    hint:
-      !sheet && !emailed
-        ? "Set GOOGLE_* + SPREADSHEET_ID and/or RESEND_API_KEY on Vercel. See .env.example in the repo."
-        : null,
+    sheetError: sheetResult.reason || null,
+    hint: !emailed
+      ? "Email requires RESEND_API_KEY in Vercel (not in GitHub). See EMAIL_SETUP.md."
+      : null,
   });
 }

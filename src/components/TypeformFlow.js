@@ -263,6 +263,7 @@ export default function TypeformFlow({ setStep }) {
     const payload = {
       idea: idea.trim(),
       category: category === "other" ? "Something else" : category || "",
+      branchQuestions: currentBranchQuestions,
       branchAnswers,
       drawingDataUrl: drawingPayload,
     };
