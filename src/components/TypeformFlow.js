@@ -51,9 +51,8 @@ export default function TypeformFlow({ setStep }) {
   const [qaInput, setQaInput] = useState("");
   const [qaInputVisible, setQaInputVisible] = useState(false);
 
-  const [drawingDataUrl, setDrawingDataUrl] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [overlay, setOverlay] = useState(false);
+  const [sendSplash, setSendSplash] = useState(false);
 
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
@@ -137,6 +136,18 @@ export default function TypeformFlow({ setStep }) {
     setPhase("qa");
   };
 
+  const skipQa = () => {
+    const nextAnswers = [...branchAnswers, ""];
+    setBranchAnswers(nextAnswers);
+    setQaMessages((m) => [...m, { text: "(skipped)", user: true }]);
+    setQaInput("");
+    if (qaIndex + 1 >= currentBranchQuestions.length) {
+      setPhase("draw");
+      return;
+    }
+    setQaIndex((i) => i + 1);
+  };
+
   const proceedQa = () => {
     const nextAnswers = [...branchAnswers, qaInput.trim()];
     setBranchAnswers(nextAnswers);
@@ -191,22 +202,22 @@ export default function TypeformFlow({ setStep }) {
     const ctx = c.getContext("2d");
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, c.width, c.height);
-    setDrawingDataUrl(null);
   };
 
-  const finalizeDrawing = () => {
-    const c = canvasRef.current;
-    if (c) setDrawingDataUrl(c.toDataURL("image/png"));
-  };
-
-  const submitAll = async () => {
+  const submitAll = async (drawingMode = "canvas") => {
     setSubmitting(true);
-    setOverlay(true);
+    setSendSplash(true);
+
+    let drawingPayload = null;
+    if (drawingMode === "canvas" && canvasRef.current) {
+      drawingPayload = canvasRef.current.toDataURL("image/png");
+    }
+
     const payload = {
       idea: idea.trim(),
       category: category || "",
       branchAnswers,
-      drawingDataUrl,
+      drawingDataUrl: drawingPayload,
     };
     try {
       await fetch("/api/manifestation", {
@@ -224,10 +235,14 @@ export default function TypeformFlow({ setStep }) {
   return (
     <div className="max-w-[420px] w-11/12 text-black pt-6 pb-24 font-mono min-h-screen">
       <div
-        className={`fixed inset-0 bg-black z-50 transition-opacity duration-[2800] pointer-events-none ${
-      overlay ? "opacity-100" : "opacity-0"
-    }`}
-      />
+        className={`fixed inset-0 z-50 manifestation-water-overlay transition-opacity duration-300 ${
+          sendSplash ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      >
+        {sendSplash && (
+          <div className="manifestation-coin" aria-hidden />
+        )}
+      </div>
 
       {phase === "intro" && (
         <div>
@@ -270,6 +285,16 @@ export default function TypeformFlow({ setStep }) {
           />
           <button
             type="button"
+            onClick={() => {
+              setIdea("I'll share more later");
+              setPhase("category");
+            }}
+            className="mt-3 text-sm text-gray-500 underline hover:text-gray-800"
+          >
+            Skip — I&apos;ll describe later
+          </button>
+          <button
+            type="button"
             disabled={idea.trim().length < 2}
             onClick={() => setPhase("category")}
             className="mt-6 px-4 py-3 border-2 border-gray-800 w-full disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100"
@@ -299,6 +324,13 @@ export default function TypeformFlow({ setStep }) {
                   {c.label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => proceedCategory("other")}
+                className="text-center px-4 py-2 text-sm text-gray-500 underline hover:text-gray-800"
+              >
+                Skip — not sure how to categorize
+              </button>
             </div>
           )}
         </div>
@@ -321,7 +353,7 @@ export default function TypeformFlow({ setStep }) {
             </p>
           )}
           {qaInputVisible && (
-            <div className="flex gap-2 mt-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start w-full mt-2">
               <textarea
                 ref={qaInputRef}
                 value={qaInput}
@@ -333,16 +365,25 @@ export default function TypeformFlow({ setStep }) {
                   }
                 }}
                 rows={3}
-                className="flex-1 resize-none bg-gray-100 border-0 p-2 focus:outline-none caret-cyan-600"
+                className="flex-1 w-full resize-none bg-gray-100 border-0 p-2 focus:outline-none caret-cyan-600"
               />
-              <button
-                type="button"
-                disabled={!qaInput.trim()}
-                onClick={proceedQa}
-                className="self-start px-3 py-2 border-2 border-gray-800 disabled:opacity-40"
-              >
-                Next
-              </button>
+              <div className="flex flex-col gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={!qaInput.trim()}
+                  onClick={proceedQa}
+                  className="px-3 py-2 border-2 border-gray-800 disabled:opacity-40"
+                >
+                  Next
+                </button>
+                <button
+                  type="button"
+                  onClick={skipQa}
+                  className="px-3 py-2 border border-gray-400 text-gray-600 text-sm hover:bg-gray-50"
+                >
+                  Skip question
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -373,12 +414,10 @@ export default function TypeformFlow({ setStep }) {
             onMouseUp={() => {
               drawingRef.current = false;
               lastPointRef.current = null;
-              finalizeDrawing();
             }}
             onMouseLeave={() => {
               drawingRef.current = false;
               lastPointRef.current = null;
-              finalizeDrawing();
             }}
             onTouchStart={(e) => {
               e.preventDefault();
@@ -405,7 +444,6 @@ export default function TypeformFlow({ setStep }) {
             onTouchEnd={() => {
               drawingRef.current = false;
               lastPointRef.current = null;
-              finalizeDrawing();
             }}
           />
           <div className="flex flex-wrap gap-2 mt-4">
@@ -418,10 +456,7 @@ export default function TypeformFlow({ setStep }) {
             </button>
             <button
               type="button"
-              onClick={() => {
-                setDrawingDataUrl(null);
-                submitAll();
-              }}
+              onClick={() => submitAll("skip")}
               disabled={submitting}
               className="px-4 py-2 border-2 border-gray-800"
             >
@@ -429,7 +464,7 @@ export default function TypeformFlow({ setStep }) {
             </button>
             <button
               type="button"
-              onClick={submitAll}
+              onClick={() => submitAll("canvas")}
               disabled={submitting}
               className="px-4 py-2 border-2 border-black bg-gray-900 text-white"
             >

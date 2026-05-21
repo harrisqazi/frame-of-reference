@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 
 const ThankYou = ({ step, setStep }) => {
   const [fadeIn, setFadeIn] = useState(false);
@@ -15,7 +15,7 @@ const ThankYou = ({ step, setStep }) => {
         transition-opacity duration-3000 w-[400px] max-w-11/12
         ${fadeIn ? "opacity-100 " : "opacity-0"}`}
     >
-      <div className="text-center">
+      <div className="text-center text-gray-900 dark:text-gray-900">
         Your manifestation has entered the ether. Your wish will be fulfilled
         shortly
       </div>

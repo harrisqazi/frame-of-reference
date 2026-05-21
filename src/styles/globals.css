@@ -2,6 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes coin-into-water {
+  0% {
+    transform: translate(-50%, -18vh) rotateY(0deg) rotateX(15deg);
+    opacity: 0.9;
+  }
+  45% {
+    transform: translate(-50%, 28vh) rotateY(720deg) rotateX(200deg);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(-50%, 115vh) rotateY(1440deg) rotateX(320deg);
+    opacity: 0;
+  }
+}
+
+.manifestation-water-overlay {
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(120, 185, 220, 0.15) 45%,
+    rgba(85, 155, 195, 0.48) 82%,
+    rgba(65, 135, 175, 0.58) 100%
+  );
+}
+
+.manifestation-coin {
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  background: radial-gradient(
+    circle at 32% 28%,
+    rgba(255, 255, 255, 0.55),
+    rgba(210, 220, 230, 0.2) 45%,
+    rgba(160, 175, 190, 0.28) 100%
+  );
+  box-shadow:
+    0 0 14px rgba(255, 255, 255, 0.4),
+    inset 0 0 12px rgba(255, 255, 255, 0.15);
+  animation: coin-into-water 2.6s ease-in forwards;
+  transform-style: preserve-3d;
+  perspective: 800px;
+}
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
@@ -17,6 +65,6 @@
 }
 
 body {
-  color: white;
+  color: rgb(var(--foreground-rgb));
   background: black;
 }

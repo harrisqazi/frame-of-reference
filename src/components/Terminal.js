@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 
 const SCRIPT = [
   { action: "type", text: "Remember that dream you had", delay: 40 },
+  { action: "countdown", steps: [1, 2, 3], interval: 1000 },
   { action: "type", text: "\n\nBring it back for a moment.", delay: 40 },
   { action: "wait", ms: 800 },
   { action: "type", text: "\n\nImagine it with all 5 senses:\n\n", delay: 40 },
