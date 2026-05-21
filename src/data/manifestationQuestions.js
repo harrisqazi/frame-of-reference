@@ -29,4 +29,8 @@ export const BRANCH_QUESTIONS = {
     "What is your name?",
     "What is your email?",
   ],
+  other: [
+    "What is your name?",
+    "What is your email?",
+  ],
 };

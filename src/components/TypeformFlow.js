@@ -90,9 +90,10 @@ export default function TypeformFlow({ setStep }) {
     26
   );
 
-  const currentBranchQuestions = category
-    ? BRANCH_QUESTIONS[category] || []
-    : [];
+  const currentBranchQuestions =
+    category && BRANCH_QUESTIONS[category]
+      ? BRANCH_QUESTIONS[category]
+      : [];
   const activeQuestion =
     currentBranchQuestions[qaIndex] || "";
 
@@ -176,10 +177,6 @@ export default function TypeformFlow({ setStep }) {
 
   const proceedCategory = (key) => {
     setCategory(key);
-    if (key === "other") {
-      setPhase("draw");
-      return;
-    }
     setQaIndex(0);
     setBranchAnswers([]);
     setQaMessages([]);
@@ -254,7 +251,7 @@ export default function TypeformFlow({ setStep }) {
     ctx.fillRect(0, 0, c.width, c.height);
   };
 
-  const submitAll = async (drawingMode = "canvas") => {
+  const submitAll = (drawingMode = "canvas") => {
     setSubmitting(true);
     setSendSplash(true);
 
@@ -265,21 +262,31 @@ export default function TypeformFlow({ setStep }) {
 
     const payload = {
       idea: idea.trim(),
-      category: category || "",
+      category: category === "other" ? "Something else" : category || "",
       branchAnswers,
       drawingDataUrl: drawingPayload,
     };
-    try {
-      await fetch("/api/manifestation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    } catch (err) {
-      console.error(err);
-    }
-    setSubmitting(false);
-    setTimeout(() => setStep(7), 4200);
+
+    fetch("/api/manifestation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.emailed && !data.sheet) {
+          console.warn(
+            "Submission saved locally only — configure Google Sheets or Resend on Vercel. See .env.example",
+            data
+          );
+        }
+      })
+      .catch((err) => console.error("manifestation submit failed:", err));
+
+    setTimeout(() => {
+      setSubmitting(false);
+      setStep(7);
+    }, 4200);
   };
 
   return (
