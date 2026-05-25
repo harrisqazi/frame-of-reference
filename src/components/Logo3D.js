@@ -33,24 +33,24 @@ const MODEL_URL = "/models/3d-logo.glb";
 
 useGLTF.preload(MODEL_URL);
 
-function centerAndScale(scene) {
+function centerAndScale(scene, sizeTarget = 5.5) {
   const box = new THREE.Box3().setFromObject(scene);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z) || 1;
-  const scale = 2.2 / maxDim;
+  const scale = sizeTarget / maxDim;
   scene.position.sub(center);
   scene.scale.setScalar(scale);
   return scale;
 }
 
-function LogoModel({ mouse, sending, sendProgress }) {
+function LogoModel({ mouse, sending, sendProgress, interactive }) {
   const group = useRef();
   const baseScaleRef = useRef(1);
   const { scene } = useGLTF(MODEL_URL);
   const cloned = useMemo(() => {
     const s = scene.clone(true);
-    baseScaleRef.current = centerAndScale(s);
+    baseScaleRef.current = centerAndScale(s, sending ? 5 : 6.5);
     s.traverse((child) => {
       if (child.isMesh && child.material) {
         const mats = Array.isArray(child.material)
@@ -83,12 +83,17 @@ function LogoModel({ mouse, sending, sendProgress }) {
       return;
     }
 
-    group.current.position.y = Math.sin(t * 0.9) * 0.06;
-    group.current.rotation.y =
-      mouse.x * 0.55 + Math.sin(t * 0.35) * 0.12;
-    group.current.rotation.x =
-      mouse.y * 0.35 + Math.sin(t * 0.5) * 0.05 + 0.08;
-    group.current.rotation.z = mouse.x * 0.08;
+    if (interactive) {
+      group.current.position.y = Math.sin(t * 0.9) * 0.04;
+      group.current.rotation.y = mouse.x * 0.2 + Math.sin(t * 0.25) * 0.06;
+      group.current.rotation.x = mouse.y * 0.12 + 0.06;
+      group.current.rotation.z = mouse.x * 0.03;
+    } else {
+      group.current.position.y = 0;
+      group.current.rotation.y = Math.sin(t * 0.2) * 0.08;
+      group.current.rotation.x = 0.06;
+      group.current.rotation.z = 0;
+    }
     group.current.scale.setScalar(base);
   });
 
@@ -99,14 +104,19 @@ function LogoModel({ mouse, sending, sendProgress }) {
   );
 }
 
-function Scene({ mouse, sending, sendProgress }) {
+function Scene({ mouse, sending, sendProgress, interactive }) {
   return (
     <>
       <ambientLight intensity={0.85} />
       <directionalLight position={[4, 6, 5]} intensity={1.1} />
       <directionalLight position={[-3, 2, -4]} intensity={0.35} />
       <pointLight position={[0, 2, 3]} intensity={0.5} color="#7dd3fc" />
-      <LogoModel mouse={mouse} sending={sending} sendProgress={sendProgress} />
+      <LogoModel
+        mouse={mouse}
+        sending={sending}
+        sendProgress={sendProgress}
+        interactive={interactive}
+      />
     </>
   );
 }
@@ -167,7 +177,12 @@ export default function Logo3D({
             antialias: true,
             powerPreference: "high-performance",
           }}
-          camera={{ position: [0, 0.15, 4.2], fov: 42, near: 0.1, far: 100 }}
+          camera={{
+            position: [0, 0, sending ? 3.2 : 2.75],
+            fov: sending ? 42 : 48,
+            near: 0.1,
+            far: 100,
+          }}
           style={{ background: "transparent", width: "100%", height: "100%" }}
         >
           <Suspense fallback={null}>
@@ -175,6 +190,7 @@ export default function Logo3D({
               mouse={mouse}
               sending={sending}
               sendProgress={sendProgress}
+              interactive={interactive}
             />
           </Suspense>
         </Canvas>

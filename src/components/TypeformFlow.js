@@ -294,7 +294,14 @@ export default function TypeformFlow({ setStep }) {
   };
 
   return (
-    <div className="max-w-[420px] w-11/12 text-black pt-6 pb-24 font-mono min-h-screen">
+    <>
+      {!sendSplash && (
+        <Logo3D
+          interactive={false}
+          className="manifestation-logo-hero"
+        />
+      )}
+
       <div
         className={`fixed inset-0 z-50 manifestation-send-overlay transition-opacity duration-500 ${
           sendSplash ? "opacity-100" : "opacity-0 pointer-events-none"
@@ -309,12 +316,7 @@ export default function TypeformFlow({ setStep }) {
         )}
       </div>
 
-      {!sendSplash && (
-        <Logo3D
-          interactive
-          className="manifestation-logo-float pointer-events-auto"
-        />
-      )}
+      <div className="relative z-10 max-w-[420px] w-11/12 text-black pt-6 pb-24 font-mono min-h-screen mx-auto">
 
       {phase === "intro" && (
         <div>
@@ -545,6 +547,7 @@ export default function TypeformFlow({ setStep }) {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

@@ -36,9 +36,9 @@
   content: "";
   position: absolute;
   left: 50%;
-  top: 42%;
-  width: min(72vw, 420px);
-  height: min(72vw, 420px);
+  top: 45%;
+  width: min(90vw, 560px);
+  height: min(90vw, 560px);
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: radial-gradient(
@@ -50,31 +50,24 @@
   pointer-events: none;
 }
 
-.manifestation-logo-float {
+.manifestation-logo-hero {
   position: fixed;
-  right: max(1rem, 4vw);
-  top: 18%;
-  width: clamp(140px, 28vw, 220px);
-  height: clamp(140px, 28vw, 220px);
-  z-index: 30;
-  opacity: 0.92;
-  filter: drop-shadow(0 12px 28px rgba(55, 125, 165, 0.18));
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.manifestation-logo-float:hover {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -48%);
+  width: min(96vw, 640px);
+  height: min(72vh, 640px);
+  z-index: 5;
+  pointer-events: none;
   opacity: 1;
-  transform: scale(1.03);
+  filter: drop-shadow(0 16px 40px rgba(55, 125, 165, 0.2));
 }
 
 @media (max-width: 640px) {
-  .manifestation-logo-float {
-    right: 0.75rem;
-    top: auto;
-    bottom: 5.5rem;
-    width: 120px;
-    height: 120px;
-    opacity: 0.78;
+  .manifestation-logo-hero {
+    width: min(98vw, 420px);
+    height: min(58vh, 420px);
+    transform: translate(-50%, -44%);
   }
 }
 
