@@ -1,0 +1,150 @@
+import { Suspense, useRef, useState, useMemo, useEffect } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { useGLTF } from "@react-three/drei";
+import * as THREE from "three";
+
+useGLTF.preload("/models/3d-logo.glb");
+
+function centerAndScale(scene) {
+  const box = new THREE.Box3().setFromObject(scene);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z) || 1;
+  const scale = 2.2 / maxDim;
+  scene.position.sub(center);
+  scene.scale.setScalar(scale);
+  return scale;
+}
+
+function LogoModel({ mouse, sending, sendProgress }) {
+  const group = useRef();
+  const baseScaleRef = useRef(1);
+  const { scene } = useGLTF("/models/3d-logo.glb");
+  const cloned = useMemo(() => {
+    const s = scene.clone(true);
+    baseScaleRef.current = centerAndScale(s);
+    s.traverse((child) => {
+      if (child.isMesh && child.material) {
+        const mats = Array.isArray(child.material)
+          ? child.material
+          : [child.material];
+        mats.forEach((mat) => {
+          mat.transparent = true;
+          if (mat.opacity === undefined || mat.opacity === 1) {
+            mat.opacity = 0.98;
+          }
+        });
+      }
+    });
+    return s;
+  }, [scene]);
+
+  useFrame((state) => {
+    if (!group.current) return;
+    const t = state.clock.elapsedTime;
+    const base = baseScaleRef.current;
+
+    if (sending) {
+      const lift = sendProgress * 2.8;
+      const spin = sendProgress * Math.PI * 3;
+      const fade = 1 - sendProgress * 0.85;
+      group.current.position.y = lift;
+      group.current.rotation.y = spin;
+      group.current.rotation.x = 0.12 + mouse.y * 0.08;
+      group.current.scale.setScalar(base * (1 + sendProgress * 0.35) * fade);
+      return;
+    }
+
+    group.current.position.y = Math.sin(t * 0.9) * 0.06;
+    group.current.rotation.y =
+      mouse.x * 0.55 + Math.sin(t * 0.35) * 0.12;
+    group.current.rotation.x =
+      mouse.y * 0.35 + Math.sin(t * 0.5) * 0.05 + 0.08;
+    group.current.rotation.z = mouse.x * 0.08;
+    group.current.scale.setScalar(base);
+  });
+
+  return (
+    <group ref={group}>
+      <primitive object={cloned} />
+    </group>
+  );
+}
+
+function Scene({ mouse, sending, sendProgress }) {
+  return (
+    <>
+      <ambientLight intensity={0.85} />
+      <directionalLight position={[4, 6, 5]} intensity={1.1} />
+      <directionalLight position={[-3, 2, -4]} intensity={0.35} />
+      <pointLight position={[0, 2, 3]} intensity={0.5} color="#7dd3fc" />
+      <LogoModel mouse={mouse} sending={sending} sendProgress={sendProgress} />
+    </>
+  );
+}
+
+export default function Logo3D({
+  sending = false,
+  interactive = true,
+  className = "",
+  onSendProgress,
+}) {
+  const containerRef = useRef(null);
+  const [mouse, setMouse] = useState({ x: 0, y: 0 });
+  const [sendProgress, setSendProgress] = useState(0);
+  const sendStartRef = useRef(null);
+
+  useEffect(() => {
+    if (!sending) {
+      setSendProgress(0);
+      sendStartRef.current = null;
+      return;
+    }
+    sendStartRef.current = performance.now();
+    let raf;
+    const tick = (now) => {
+      const start = sendStartRef.current || now;
+      const p = Math.min((now - start) / 3800, 1);
+      setSendProgress(p);
+      onSendProgress?.(p);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [sending, onSendProgress]);
+
+  const handlePointerMove = (e) => {
+    if (!interactive || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    setMouse({ x, y });
+  };
+
+  const resetMouse = () => setMouse({ x: 0, y: 0 });
+
+  return (
+    <div
+      ref={containerRef}
+      className={className}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={resetMouse}
+      aria-hidden
+    >
+      <Canvas
+        dpr={[1, 2]}
+        gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
+        camera={{ position: [0, 0.15, 4.2], fov: 42, near: 0.1, far: 100 }}
+        style={{ background: "transparent", width: "100%", height: "100%" }}
+      >
+        <Suspense fallback={null}>
+          <Scene
+            mouse={mouse}
+            sending={sending}
+            sendProgress={sendProgress}
+          />
+        </Suspense>
+      </Canvas>
+    </div>
+  );
+}

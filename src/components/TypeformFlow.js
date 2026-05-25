@@ -1,5 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
+import dynamic from "next/dynamic";
 import { BRANCH_QUESTIONS } from "@/data/manifestationQuestions";
+
+const Logo3D = dynamic(() => import("@/components/Logo3D"), { ssr: false });
 
 const CYCLING_IDEAS = [
   "Recycling infrastructure in Guadalajara",
@@ -293,20 +296,25 @@ export default function TypeformFlow({ setStep }) {
   return (
     <div className="max-w-[420px] w-11/12 text-black pt-6 pb-24 font-mono min-h-screen">
       <div
-        className={`fixed inset-0 z-50 manifestation-water-overlay transition-opacity duration-300 ${
+        className={`fixed inset-0 z-50 manifestation-send-overlay transition-opacity duration-500 ${
           sendSplash ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
         {sendSplash && (
-          <>
-            <div className="manifestation-water-surface" aria-hidden />
-            <div className="manifestation-coin" aria-hidden />
-            <div className="manifestation-ripple manifestation-ripple-1" aria-hidden />
-            <div className="manifestation-ripple manifestation-ripple-2" aria-hidden />
-            <div className="manifestation-ripple manifestation-ripple-3" aria-hidden />
-          </>
+          <Logo3D
+            sending
+            interactive={false}
+            className="manifestation-logo-send"
+          />
         )}
       </div>
+
+      {!sendSplash && (
+        <Logo3D
+          interactive
+          className="manifestation-logo-float pointer-events-auto"
+        />
+      )}
 
       {phase === "intro" && (
         <div>

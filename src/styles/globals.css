@@ -2,129 +2,80 @@
 @tailwind components;
 @tailwind utilities;
 
-@keyframes coin-into-water {
-  0% {
-    transform: translate(-50%, -14vh) rotateY(0deg) rotateX(12deg) scale(1);
-    opacity: 0.95;
-  }
-  52% {
-    transform: translate(-50%, 38vh) rotateY(540deg) rotateX(180deg) scale(1);
-    opacity: 0.92;
-  }
-  58% {
-    transform: translate(-50%, 41vh) rotateY(600deg) rotateX(200deg) scale(0.88);
-    opacity: 0.75;
-  }
-  72% {
-    transform: translate(-50%, 43vh) rotateY(720deg) rotateX(240deg) scale(0.35);
-    opacity: 0;
-  }
-  100% {
-    transform: translate(-50%, 43vh) rotateY(720deg) rotateX(240deg) scale(0);
-    opacity: 0;
-  }
-}
-
-@keyframes water-surface-shimmer {
+@keyframes logo-glow-pulse {
   0%,
   100% {
     opacity: 0.35;
+    transform: scale(1);
   }
   50% {
-    opacity: 0.55;
+    opacity: 0.65;
+    transform: scale(1.08);
   }
 }
 
-@keyframes ripple-expand {
-  0% {
-    transform: translate(-50%, -50%) scale(0.15);
-    opacity: 0.75;
-    border-width: 3px;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(5.5);
-    opacity: 0;
-    border-width: 1px;
-  }
-}
-
-.manifestation-water-overlay {
+.manifestation-send-overlay {
   pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(120, 185, 220, 0.08) 38%,
-    rgba(85, 155, 195, 0.42) 72%,
-    rgba(55, 125, 165, 0.62) 100%
-  );
-}
-
-.manifestation-water-surface {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 46vh;
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.65) 20%,
-    rgba(200, 230, 255, 0.9) 50%,
-    rgba(255, 255, 255, 0.65) 80%,
-    transparent
-  );
-  box-shadow:
-    0 0 28px rgba(140, 200, 240, 0.55),
-    0 8px 40px rgba(70, 140, 190, 0.35);
-  opacity: 0;
-  animation: water-surface-shimmer 0.9s ease-in-out 1.3s forwards;
-}
-
-.manifestation-coin {
-  position: absolute;
-  left: 50%;
-  top: 8%;
-  width: 88px;
-  height: 88px;
-  border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.85);
   background: radial-gradient(
-    circle at 32% 28%,
-    rgba(255, 255, 255, 0.6),
-    rgba(210, 220, 230, 0.25) 45%,
-    rgba(140, 160, 180, 0.35) 100%
+    ellipse 70% 55% at 50% 45%,
+    rgba(125, 211, 252, 0.12) 0%,
+    rgba(55, 125, 165, 0.06) 45%,
+    transparent 72%
   );
-  box-shadow:
-    0 0 22px rgba(255, 255, 255, 0.45),
-    inset 0 0 16px rgba(255, 255, 255, 0.2);
-  animation: coin-into-water 2.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards;
-  transform-style: preserve-3d;
+}
+
+.manifestation-logo-send {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 2;
 }
 
-.manifestation-ripple {
+.manifestation-logo-send::before {
+  content: "";
   position: absolute;
   left: 50%;
-  top: 46vh;
-  width: 40px;
-  height: 40px;
+  top: 42%;
+  width: min(72vw, 420px);
+  height: min(72vw, 420px);
+  transform: translate(-50%, -50%);
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.55);
-  box-shadow: 0 0 12px rgba(180, 220, 255, 0.4);
-  opacity: 0;
-  z-index: 1;
+  background: radial-gradient(
+    circle,
+    rgba(125, 211, 252, 0.22) 0%,
+    transparent 68%
+  );
+  animation: logo-glow-pulse 2.8s ease-in-out infinite;
+  pointer-events: none;
 }
 
-.manifestation-ripple-1 {
-  animation: ripple-expand 1.4s ease-out 1.35s forwards;
+.manifestation-logo-float {
+  position: fixed;
+  right: max(1rem, 4vw);
+  top: 18%;
+  width: clamp(140px, 28vw, 220px);
+  height: clamp(140px, 28vw, 220px);
+  z-index: 30;
+  opacity: 0.92;
+  filter: drop-shadow(0 12px 28px rgba(55, 125, 165, 0.18));
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
-.manifestation-ripple-2 {
-  animation: ripple-expand 1.6s ease-out 1.5s forwards;
+.manifestation-logo-float:hover {
+  opacity: 1;
+  transform: scale(1.03);
 }
 
-.manifestation-ripple-3 {
-  animation: ripple-expand 1.8s ease-out 1.65s forwards;
+@media (max-width: 640px) {
+  .manifestation-logo-float {
+    right: 0.75rem;
+    top: auto;
+    bottom: 5.5rem;
+    width: 120px;
+    height: 120px;
+    opacity: 0.78;
+  }
 }
 
 :root {
