@@ -41,5 +41,5 @@ frame-of-reference-b0f08415a448.json
 # public folder with big images
 /public/animation_3/1920x1080
 
-# 3D logo (too large for fork LFS; deploy via hosting or upstream repo)
-/public/models/*.glb
+# uncompressed 3D logo source (keep locally; repo ships compressed 3d-logo.glb)
+/public/models/3d-logo-compressed.glb

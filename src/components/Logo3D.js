@@ -1,9 +1,11 @@
 import { Suspense, useRef, useState, useMemo, useEffect } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useGLTF } from "@react-three/drei";
+import { useGLTF, ErrorBoundary } from "@react-three/drei";
 import * as THREE from "three";
 
-useGLTF.preload("/models/3d-logo.glb");
+const MODEL_URL = "/models/3d-logo.glb";
+
+useGLTF.preload(MODEL_URL);
 
 function centerAndScale(scene) {
   const box = new THREE.Box3().setFromObject(scene);
@@ -19,7 +21,7 @@ function centerAndScale(scene) {
 function LogoModel({ mouse, sending, sendProgress }) {
   const group = useRef();
   const baseScaleRef = useRef(1);
-  const { scene } = useGLTF("/models/3d-logo.glb");
+  const { scene } = useGLTF(MODEL_URL);
   const cloned = useMemo(() => {
     const s = scene.clone(true);
     baseScaleRef.current = centerAndScale(s);
@@ -131,20 +133,26 @@ export default function Logo3D({
       onPointerLeave={resetMouse}
       aria-hidden
     >
-      <Canvas
-        dpr={[1, 2]}
-        gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
-        camera={{ position: [0, 0.15, 4.2], fov: 42, near: 0.1, far: 100 }}
-        style={{ background: "transparent", width: "100%", height: "100%" }}
-      >
-        <Suspense fallback={null}>
-          <Scene
-            mouse={mouse}
-            sending={sending}
-            sendProgress={sendProgress}
-          />
-        </Suspense>
-      </Canvas>
+      <ErrorBoundary fallback={null}>
+        <Canvas
+          dpr={[1, 2]}
+          gl={{
+            alpha: true,
+            antialias: true,
+            powerPreference: "high-performance",
+          }}
+          camera={{ position: [0, 0.15, 4.2], fov: 42, near: 0.1, far: 100 }}
+          style={{ background: "transparent", width: "100%", height: "100%" }}
+        >
+          <Suspense fallback={null}>
+            <Scene
+              mouse={mouse}
+              sending={sending}
+              sendProgress={sendProgress}
+            />
+          </Suspense>
+        </Canvas>
+      </ErrorBoundary>
     </div>
   );
 }
