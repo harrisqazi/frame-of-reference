@@ -1,7 +1,33 @@
-import { Suspense, useRef, useState, useMemo, useEffect } from "react";
+import React, {
+  Suspense,
+  useRef,
+  useState,
+  useMemo,
+  useEffect,
+} from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useGLTF, ErrorBoundary } from "@react-three/drei";
+import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+
+class ModelErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(err) {
+    console.warn("3D logo failed to load:", err);
+  }
+
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
 
 const MODEL_URL = "/models/3d-logo.glb";
 
@@ -133,7 +159,7 @@ export default function Logo3D({
       onPointerLeave={resetMouse}
       aria-hidden
     >
-      <ErrorBoundary fallback={null}>
+      <ModelErrorBoundary>
         <Canvas
           dpr={[1, 2]}
           gl={{
@@ -152,7 +178,7 @@ export default function Logo3D({
             />
           </Suspense>
         </Canvas>
-      </ErrorBoundary>
+      </ModelErrorBoundary>
     </div>
   );
 }
