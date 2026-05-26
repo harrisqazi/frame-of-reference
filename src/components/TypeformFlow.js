@@ -297,7 +297,7 @@ export default function TypeformFlow({ setStep }) {
     <>
       {!sendSplash && (
         <Logo3D
-          interactive={false}
+          interactive
           className="manifestation-logo-hero"
         />
       )}

@@ -1,12 +1,6 @@
-import React, {
-  Suspense,
-  useRef,
-  useState,
-  useMemo,
-  useEffect,
-} from "react";
+import React, { Suspense, useRef, useState, useEffect } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useGLTF } from "@react-three/drei";
+import { useGLTF, useAnimations, Environment } from "@react-three/drei";
 import * as THREE from "three";
 
 class ModelErrorBoundary extends React.Component {
@@ -47,11 +41,15 @@ function centerAndScale(scene, sizeTarget = 5.5) {
 function LogoModel({ mouse, sending, sendProgress, interactive }) {
   const group = useRef();
   const baseScaleRef = useRef(1);
-  const { scene } = useGLTF(MODEL_URL);
-  const cloned = useMemo(() => {
-    const s = scene.clone(true);
-    baseScaleRef.current = centerAndScale(s, sending ? 5 : 6.5);
-    s.traverse((child) => {
+  const preparedRef = useRef(false);
+  const { scene, animations } = useGLTF(MODEL_URL);
+  const { actions } = useAnimations(animations, group);
+
+  useEffect(() => {
+    if (preparedRef.current) return;
+    preparedRef.current = true;
+    baseScaleRef.current = centerAndScale(scene, sending ? 5 : 6.5);
+    scene.traverse((child) => {
       if (child.isMesh && child.material) {
         const mats = Array.isArray(child.material)
           ? child.material
@@ -61,13 +59,30 @@ function LogoModel({ mouse, sending, sendProgress, interactive }) {
           if (mat.opacity === undefined || mat.opacity === 1) {
             mat.opacity = 0.98;
           }
+          if (mat.metalness !== undefined) {
+            mat.metalness = Math.min(mat.metalness + 0.15, 1);
+            mat.roughness = Math.max((mat.roughness ?? 0.5) - 0.15, 0.08);
+          }
+          if (mat.emissive) {
+            mat.emissive.set("#0e7490");
+            mat.emissiveIntensity = 0.12;
+          }
         });
       }
     });
-    return s;
-  }, [scene]);
+  }, [scene, sending]);
 
-  useFrame((state) => {
+  useEffect(() => {
+    const clip =
+      actions.EmptyAction ||
+      actions.MESH_1Action ||
+      Object.values(actions)[0];
+    if (!clip) return;
+    clip.reset().setLoop(-1, 300).fadeIn(0.3).play();
+    return () => clip.fadeOut(0.2);
+  }, [actions]);
+
+  useFrame((state, delta) => {
     if (!group.current) return;
     const t = state.clock.elapsedTime;
     const base = baseScaleRef.current;
@@ -89,17 +104,18 @@ function LogoModel({ mouse, sending, sendProgress, interactive }) {
       group.current.rotation.x = mouse.y * 0.12 + 0.06;
       group.current.rotation.z = mouse.x * 0.03;
     } else {
-      group.current.position.y = 0;
-      group.current.rotation.y = Math.sin(t * 0.2) * 0.08;
-      group.current.rotation.x = 0.06;
-      group.current.rotation.z = 0;
+      group.current.position.y = Math.sin(t * 0.6) * 0.05;
+      group.current.rotation.y += 0.35 * delta;
+      group.current.rotation.x =
+        0.1 + Math.sin(t * 0.35) * 0.06 + mouse.y * 0.05;
+      group.current.rotation.z = mouse.x * 0.04;
     }
     group.current.scale.setScalar(base);
   });
 
   return (
     <group ref={group}>
-      <primitive object={cloned} />
+      <primitive object={scene} />
     </group>
   );
 }
@@ -107,10 +123,12 @@ function LogoModel({ mouse, sending, sendProgress, interactive }) {
 function Scene({ mouse, sending, sendProgress, interactive }) {
   return (
     <>
-      <ambientLight intensity={0.85} />
-      <directionalLight position={[4, 6, 5]} intensity={1.1} />
-      <directionalLight position={[-3, 2, -4]} intensity={0.35} />
-      <pointLight position={[0, 2, 3]} intensity={0.5} color="#7dd3fc" />
+      <Environment preset="city" />
+      <ambientLight intensity={0.55} />
+      <directionalLight position={[4, 6, 5]} intensity={1.35} color="#ffffff" />
+      <directionalLight position={[-4, 1, -3]} intensity={0.55} color="#67e8f9" />
+      <pointLight position={[2, 3, 4]} intensity={0.85} color="#22d3ee" />
+      <pointLight position={[-3, -1, 2]} intensity={0.45} color="#a5f3fc" />
       <LogoModel
         mouse={mouse}
         sending={sending}
