@@ -341,7 +341,7 @@ export default function TypeformFlow({ setStep }) {
         </div>
       )}
 
-      <div className="relative z-10 max-w-[420px] w-11/12 text-black pt-24 sm:pt-8 pb-24 font-mono mx-auto bg-gray-100/95 backdrop-blur-sm">
+      <div className="relative z-10 max-w-[420px] w-11/12 text-black pt-36 sm:pt-28 pb-24 font-mono mx-auto bg-gray-100/95 backdrop-blur-sm">
 
       {phase === "intro" && (
         <div>

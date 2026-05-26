@@ -26,8 +26,8 @@ class ModelErrorBoundary extends React.Component {
 const MODEL_URL = "/models/3d-logo.glb";
 
 const MODE_CONFIG = {
-  send: { scale: 6.8, fov: 42 },
-  corner: { scale: 4.4, cameraZ: 3.35, fov: 44 },
+  send: { scale: 48, fov: 50 },
+  corner: { scale: 32, cameraZ: 2.15, fov: 48 },
 };
 
 useGLTF.preload(MODEL_URL);
@@ -43,13 +43,32 @@ function centerAndScale(object, sizeTarget) {
   return scale;
 }
 
+function enhanceMaterials(mats, mode) {
+  mats.forEach((mat) => {
+    if (mat.metalness === undefined) return;
+    mat.transparent = false;
+    mat.opacity = 1;
+    mat.metalness = 0.95;
+    mat.roughness = 0.1;
+    mat.envMapIntensity = mode === "send" ? 2.8 : 2.4;
+    if (mat.color) {
+      mat.color.set("#e8eef2");
+    }
+    if (mat.emissive) {
+      mat.emissive.set("#0c4a6e");
+      mat.emissiveIntensity = mode === "send" ? 0.08 : 0.05;
+    }
+    mat.needsUpdate = true;
+  });
+}
+
 function SendCamera({ sendProgress }) {
   const { camera } = useThree();
-  const startZ = 5.4;
-  const endZ = 2.5;
+  const startZ = 3.6;
+  const endZ = 1.15;
 
   useFrame(() => {
-    const eased = sendProgress * sendProgress;
+    const eased = 1 - Math.pow(1 - sendProgress, 2);
     camera.position.set(0, 0, THREE.MathUtils.lerp(startZ, endZ, eased));
     camera.lookAt(0, 0, 0);
     camera.updateProjectionMatrix();
@@ -72,20 +91,7 @@ function LogoModel({ mode, sendProgress }) {
         const mats = Array.isArray(child.material)
           ? child.material
           : [child.material];
-        mats.forEach((mat) => {
-          mat.transparent = true;
-          if (mat.opacity === undefined || mat.opacity === 1) {
-            mat.opacity = 0.98;
-          }
-          if (mat.metalness !== undefined) {
-            mat.metalness = Math.min(mat.metalness + 0.25, 1);
-            mat.roughness = Math.max((mat.roughness ?? 0.5) - 0.22, 0.06);
-          }
-          if (mat.emissive) {
-            mat.emissive.set("#0891b2");
-            mat.emissiveIntensity = mode === "send" ? 0.18 : 0.1;
-          }
-        });
+        enhanceMaterials(mats, mode);
       }
     });
     return clone;
@@ -101,7 +107,7 @@ function LogoModel({ mode, sendProgress }) {
         sendProgress > 0.88
           ? 1 - ((sendProgress - 0.88) / 0.12) * 0.95
           : 1;
-      const zoomScale = 0.82 + sendProgress * 0.28;
+      const zoomScale = 0.75 + sendProgress * 0.35;
       group.current.position.set(0, 0, 0);
       group.current.rotation.y = 0.45 + t * 0.1;
       group.current.rotation.x = 0.12 + Math.sin(t * 0.28) * 0.03;
@@ -110,7 +116,7 @@ function LogoModel({ mode, sendProgress }) {
       return;
     }
 
-    group.current.position.y = Math.sin(t * 0.55) * 0.035;
+    group.current.position.y = Math.sin(t * 0.55) * 0.02;
     group.current.rotation.y += 0.18 * delta;
     group.current.rotation.x = 0.12 + Math.sin(t * 0.4) * 0.05;
     group.current.scale.setScalar(base);
@@ -126,18 +132,19 @@ function LogoModel({ mode, sendProgress }) {
 function Scene({ mode, sendProgress }) {
   return (
     <>
-      <Environment preset="studio" />
-      <ambientLight intensity={0.45} />
-      <directionalLight position={[5, 8, 6]} intensity={1.6} color="#ffffff" />
-      <directionalLight position={[-5, 2, -4]} intensity={0.7} color="#67e8f9" />
-      <pointLight position={[3, 4, 5]} intensity={1.1} color="#22d3ee" />
-      <pointLight position={[-4, -2, 3]} intensity={0.55} color="#f0abfc" />
+      <Environment preset="studio" environmentIntensity={2.2} />
+      <ambientLight intensity={0.65} />
+      <directionalLight position={[6, 10, 8]} intensity={2} color="#ffffff" />
+      <directionalLight position={[-6, 3, -5]} intensity={1} color="#a5f3fc" />
+      <pointLight position={[4, 5, 6]} intensity={1.4} color="#ffffff" />
+      <pointLight position={[-5, -2, 4]} intensity={0.9} color="#67e8f9" />
+      <pointLight position={[0, -4, 3]} intensity={0.5} color="#e0f2fe" />
       <spotLight
-        position={[0, 6, 2]}
-        angle={0.35}
-        penumbra={0.8}
-        intensity={0.9}
-        color="#e0f2fe"
+        position={[0, 8, 4]}
+        angle={0.45}
+        penumbra={0.9}
+        intensity={1.2}
+        color="#ffffff"
       />
       {mode === "send" && <SendCamera sendProgress={sendProgress} />}
       <LogoModel mode={mode} sendProgress={sendProgress} />
@@ -175,7 +182,7 @@ export default function Logo3D({
     return () => cancelAnimationFrame(raf);
   }, [sending, onSendProgress]);
 
-  const cameraZ = mode === "send" ? 5.4 : config.cameraZ;
+  const cameraZ = mode === "send" ? 3.6 : config.cameraZ;
 
   return (
     <div className={`${className} pointer-events-none`} aria-hidden>
@@ -186,14 +193,16 @@ export default function Logo3D({
             alpha: true,
             antialias: true,
             powerPreference: "high-performance",
+            toneMapping: THREE.ACESFilmicToneMapping,
+            toneMappingExposure: 1.15,
           }}
+          style={{ background: "transparent", width: "100%", height: "100%" }}
           camera={{
             position: [0, 0, cameraZ],
             fov: config.fov,
-            near: 0.1,
-            far: 100,
+            near: 0.05,
+            far: 200,
           }}
-          style={{ background: "transparent", width: "100%", height: "100%" }}
         >
           <Suspense fallback={null}>
             <Scene mode={mode} sendProgress={sendProgress} />
