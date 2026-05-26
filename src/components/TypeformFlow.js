@@ -68,7 +68,7 @@ export default function TypeformFlow({ setStep }) {
 
   const [qaIndex, setQaIndex] = useState(0);
   const [branchAnswers, setBranchAnswers] = useState([]);
-  const [qaMessages, setQaMessages] = useState([]);
+  const [qaHistory, setQaHistory] = useState([]);
   const [qaTyped, setQaTyped] = useState("");
   const [qaTypingDone, setQaTypingDone] = useState(false);
   const [qaInput, setQaInput] = useState("");
@@ -81,6 +81,7 @@ export default function TypeformFlow({ setStep }) {
   const drawingRef = useRef(false);
   const lastPointRef = useRef(null);
   const qaInputRef = useRef(null);
+  const qaActiveRef = useRef(null);
 
   const titleText = "What do you want to create?";
   const titleTyped = useTypewriter(titleText, phase === "intro", 32);
@@ -157,7 +158,6 @@ export default function TypeformFlow({ setStep }) {
     const step = () => {
       if (cancelled) return;
       if (i >= activeQuestion.length) {
-        setQaMessages((m) => [...m, { text: activeQuestion, user: false }]);
         setQaTypingDone(true);
         setQaTyped("");
         setTimeout(() => setQaInputVisible(true), 200);
@@ -178,18 +178,39 @@ export default function TypeformFlow({ setStep }) {
     if (qaInputVisible && qaInputRef.current) qaInputRef.current.focus();
   }, [qaInputVisible, qaIndex]);
 
+  useEffect(() => {
+    if (phase !== "qa") return;
+    qaActiveRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [phase, qaIndex, qaInputVisible, qaTypingDone, qaHistory.length]);
+
   const proceedCategory = (key) => {
     setCategory(key);
     setQaIndex(0);
     setBranchAnswers([]);
-    setQaMessages([]);
+    setQaHistory([]);
     setPhase("qa");
   };
 
+  const updateHistoryAnswer = (index, value) => {
+    setQaHistory((history) => {
+      const next = [...history];
+      next[index] = { ...next[index], answer: value };
+      return next;
+    });
+    setBranchAnswers((answers) => {
+      const next = [...answers];
+      next[index] = value;
+      return next;
+    });
+  };
+
   const skipQa = () => {
-    const nextAnswers = [...branchAnswers, ""];
-    setBranchAnswers(nextAnswers);
-    setQaMessages((m) => [...m, { text: "(skipped)", user: true }]);
+    const nextHistory = [
+      ...qaHistory,
+      { question: activeQuestion, answer: "" },
+    ];
+    setQaHistory(nextHistory);
+    setBranchAnswers(nextHistory.map((t) => t.answer));
     setQaInput("");
     if (qaIndex + 1 >= currentBranchQuestions.length) {
       setPhase("draw");
@@ -199,9 +220,12 @@ export default function TypeformFlow({ setStep }) {
   };
 
   const proceedQa = () => {
-    const nextAnswers = [...branchAnswers, qaInput.trim()];
-    setBranchAnswers(nextAnswers);
-    setQaMessages((m) => [...m, { text: qaInput.trim(), user: true }]);
+    const nextHistory = [
+      ...qaHistory,
+      { question: activeQuestion, answer: qaInput.trim() },
+    ];
+    setQaHistory(nextHistory);
+    setBranchAnswers(nextHistory.map((t) => t.answer));
     setQaInput("");
     if (qaIndex + 1 >= currentBranchQuestions.length) {
       setPhase("draw");
@@ -300,16 +324,15 @@ export default function TypeformFlow({ setStep }) {
           sendSplash ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
-        {sendSplash && (
+        {(sendSplash || phase === "draw") && (
           <Logo3D
-            sending
-            interactive={false}
+            sending={sendSplash}
             className="manifestation-logo-send"
           />
         )}
       </div>
 
-      <div className="relative z-10 max-w-[420px] w-11/12 text-black pt-6 pb-24 font-mono min-h-screen mx-auto">
+      <div className="relative z-10 max-w-[420px] w-11/12 text-black pt-6 pb-24 font-mono min-h-screen mx-auto bg-gray-100/90 backdrop-blur-sm">
 
       {phase === "intro" && (
         <div>
@@ -404,55 +427,66 @@ export default function TypeformFlow({ setStep }) {
       )}
 
       {phase === "qa" && (
-        <div>
-          {qaMessages.map((m, i) => (
-            <p
-              key={i}
-              className={m.user ? "text-gray-500 mt-2 mb-6" : "mb-2"}
-            >
-              {m.text}
-            </p>
-          ))}
-          {!qaTypingDone && (
-            <p>
-              {qaTyped}
-              <span className="text-cyan-600 ml-0.5">_</span>
-            </p>
-          )}
-          {qaInputVisible && (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start w-full mt-2">
+        <div className="pb-8">
+          {qaHistory.map((turn, i) => (
+            <div key={`qa-${i}`} className="mb-8 pb-6 border-b border-gray-200">
+              <p className="mb-2 text-gray-900">{turn.question}</p>
+              <label className="block text-xs text-gray-500 mb-1">
+                Your answer (editable)
+              </label>
               <textarea
-                ref={qaInputRef}
-                value={qaInput}
-                onChange={(e) => setQaInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (qaInput.trim()) proceedQa();
-                  }
-                }}
+                value={turn.answer}
+                onChange={(e) => updateHistoryAnswer(i, e.target.value)}
                 rows={3}
-                className="flex-1 w-full resize-none bg-gray-100 border-0 p-2 focus:outline-none caret-cyan-600"
+                className="w-full resize-none bg-gray-100 border-0 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 text-gray-700"
               />
-              <div className="flex flex-col gap-2 shrink-0">
-                <button
-                  type="button"
-                  disabled={!qaInput.trim()}
-                  onClick={proceedQa}
-                  className="px-3 py-2 border-2 border-gray-800 disabled:opacity-40"
-                >
-                  Next
-                </button>
-                <button
-                  type="button"
-                  onClick={skipQa}
-                  className="px-3 py-2 border border-gray-400 text-gray-600 text-sm hover:bg-gray-50"
-                >
-                  Skip question
-                </button>
-              </div>
             </div>
-          )}
+          ))}
+
+          <div ref={qaActiveRef} className="scroll-mt-24">
+            {!qaTypingDone ? (
+              <p className="mb-2">
+                {qaTyped}
+                <span className="text-cyan-600 ml-0.5">_</span>
+              </p>
+            ) : (
+              <p className="mb-2 text-gray-900">{activeQuestion}</p>
+            )}
+            {qaInputVisible && (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start w-full mt-2">
+                <textarea
+                  ref={qaInputRef}
+                  value={qaInput}
+                  onChange={(e) => setQaInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (qaInput.trim()) proceedQa();
+                    }
+                  }}
+                  rows={3}
+                  className="flex-1 w-full resize-none bg-gray-100 border-0 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 caret-cyan-600"
+                />
+                <div className="flex flex-col gap-2 shrink-0">
+                  <button
+                    type="button"
+                    disabled={!qaInput.trim()}
+                    onClick={proceedQa}
+                    className="px-3 py-2 border-2 border-gray-800 disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                  <button
+                    type="button"
+                    onClick={skipQa}
+                    className="px-3 py-2 border border-gray-400 text-gray-600 text-sm hover:bg-gray-50"
+                  >
+                    Skip question
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

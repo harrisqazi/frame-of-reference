@@ -1,11 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 
 const SCRIPT = [
-  { action: "type", text: "Remember that dream you had", delay: 40 },
+  { action: "type", text: "Remember that dream you held.", delay: 40 },
+  { action: "flash", text: "VISUALIZE IT", ms: 1100 },
+  { action: "type", text: "\n\nThe one that begged to be followed.", delay: 40 },
   { action: "countdown", steps: [1, 2, 3], interval: 1000 },
   { action: "type", text: "\n\nBring it back for a moment.", delay: 40 },
   { action: "wait", ms: 800 },
-  { action: "type", text: "\n\nImagine it with all 5 senses:\n\n", delay: 40 },
+  {
+    action: "type",
+    text: "\n\nImagine seeing it through with all 5 senses:\n\n",
+    delay: 40,
+  },
   {
     action: "type",
     text: "The feeling of having accomplished that dream,\nthe smell in the room,\nthe taste of gratitude on your tongue,\nthe sound of your vision realized ",
@@ -21,6 +27,7 @@ const TerminalSimulator = ({ step, setStep }) => {
   const [countdownLabel, setCountdownLabel] = useState("");
   const [buttonVisible, setButtonVisible] = useState(false);
   const [scriptReady, setScriptReady] = useState(false);
+  const [flashOverlay, setFlashOverlay] = useState(null);
 
   const [scrollPosition, setScrollPosition] = useState(0);
   const [images, setImages] = useState([]);
@@ -109,6 +116,15 @@ const TerminalSimulator = ({ step, setStep }) => {
             await wait(segment.interval);
           }
           content = base + ".".repeat(segment.count);
+        } else if (segment.action === "flash") {
+          setCountdownLabel("");
+          if (!cancelled && scriptRunIdRef.current === runId) {
+            setFlashOverlay(segment.text);
+          }
+          await wait(segment.ms);
+          if (!cancelled && scriptRunIdRef.current === runId) {
+            setFlashOverlay(null);
+          }
         }
       }
 
@@ -233,6 +249,13 @@ const TerminalSimulator = ({ step, setStep }) => {
 
   return (
     <>
+      {flashOverlay && (
+        <div className="fixed inset-0 z-[60] bg-white flex items-center justify-center">
+          <p className="text-black font-mono text-3xl sm:text-5xl tracking-[0.35em] uppercase">
+            {flashOverlay}
+          </p>
+        </div>
+      )}
       {step === 0 && (
         <>
           <div style={{ height: `${scrollSpacerHeight}px` }} />

@@ -1,6 +1,6 @@
-import React, { Suspense, useRef, useState, useEffect } from "react";
+import React, { Suspense, useRef, useState, useEffect, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useGLTF, useAnimations, Environment } from "@react-three/drei";
+import { useGLTF, Environment } from "@react-three/drei";
 import * as THREE from "three";
 
 class ModelErrorBoundary extends React.Component {
@@ -27,29 +27,26 @@ const MODEL_URL = "/models/3d-logo.glb";
 
 useGLTF.preload(MODEL_URL);
 
-function centerAndScale(scene, sizeTarget = 5.5) {
-  const box = new THREE.Box3().setFromObject(scene);
+function centerAndScale(object, sizeTarget = 5.5) {
+  const box = new THREE.Box3().setFromObject(object);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z) || 1;
   const scale = sizeTarget / maxDim;
-  scene.position.sub(center);
-  scene.scale.setScalar(scale);
+  object.position.sub(center);
+  object.scale.setScalar(scale);
   return scale;
 }
 
-function LogoModel({ mouse, sending, sendProgress, interactive }) {
+function LogoModel({ mouse, sending, sendProgress }) {
   const group = useRef();
   const baseScaleRef = useRef(1);
-  const preparedRef = useRef(false);
-  const { scene, animations } = useGLTF(MODEL_URL);
-  const { actions } = useAnimations(animations, group);
+  const { scene } = useGLTF(MODEL_URL);
 
-  useEffect(() => {
-    if (preparedRef.current) return;
-    preparedRef.current = true;
-    baseScaleRef.current = centerAndScale(scene, sending ? 3.4 : 6.5);
-    scene.traverse((child) => {
+  const model = useMemo(() => {
+    const clone = scene.clone(true);
+    baseScaleRef.current = centerAndScale(clone, sending ? 4.6 : 6.5);
+    clone.traverse((child) => {
       if (child.isMesh && child.material) {
         const mats = Array.isArray(child.material)
           ? child.material
@@ -70,17 +67,8 @@ function LogoModel({ mouse, sending, sendProgress, interactive }) {
         });
       }
     });
+    return clone;
   }, [scene, sending]);
-
-  useEffect(() => {
-    const clip =
-      actions.EmptyAction ||
-      actions.MESH_1Action ||
-      Object.values(actions)[0];
-    if (!clip) return;
-    clip.reset().setLoop(-1, 300).fadeIn(0.3).play();
-    return () => clip.fadeOut(0.2);
-  }, [actions]);
 
   useFrame((state, delta) => {
     if (!group.current) return;
@@ -88,39 +76,33 @@ function LogoModel({ mouse, sending, sendProgress, interactive }) {
     const base = baseScaleRef.current;
 
     if (sending) {
-      const lift = sendProgress * 2.8;
-      const spin = sendProgress * Math.PI * 3;
-      const fade = 1 - sendProgress * 0.85;
+      const lift = sendProgress * 1.6;
+      const spin = sendProgress * Math.PI * 2.5;
+      const fade =
+        sendProgress > 0.78
+          ? 1 - ((sendProgress - 0.78) / 0.22) * 0.92
+          : 1;
       group.current.position.y = lift;
-      group.current.rotation.y = spin;
-      group.current.rotation.x = 0.12 + mouse.y * 0.08;
-      group.current.scale.setScalar(base * (1 + sendProgress * 0.12) * fade);
+      group.current.rotation.y = spin + t * 0.15;
+      group.current.rotation.x = 0.1 + Math.sin(t * 0.4) * 0.05;
+      group.current.scale.setScalar(base * (1 + sendProgress * 0.08) * fade);
       return;
     }
 
-    if (interactive) {
-      group.current.position.y = Math.sin(t * 0.9) * 0.04;
-      group.current.rotation.y = mouse.x * 0.2 + Math.sin(t * 0.25) * 0.06;
-      group.current.rotation.x = mouse.y * 0.12 + 0.06;
-      group.current.rotation.z = mouse.x * 0.03;
-    } else {
-      group.current.position.y = Math.sin(t * 0.6) * 0.05;
-      group.current.rotation.y += 0.35 * delta;
-      group.current.rotation.x =
-        0.1 + Math.sin(t * 0.35) * 0.06 + mouse.y * 0.05;
-      group.current.rotation.z = mouse.x * 0.04;
-    }
+    group.current.position.y = Math.sin(t * 0.6) * 0.05;
+    group.current.rotation.y += 0.35 * delta;
+    group.current.rotation.x = 0.1 + Math.sin(t * 0.35) * 0.06;
     group.current.scale.setScalar(base);
   });
 
   return (
     <group ref={group}>
-      <primitive object={scene} />
+      <primitive object={model} />
     </group>
   );
 }
 
-function Scene({ mouse, sending, sendProgress, interactive }) {
+function Scene({ mouse, sending, sendProgress }) {
   return (
     <>
       <Environment preset="city" />
@@ -129,24 +111,18 @@ function Scene({ mouse, sending, sendProgress, interactive }) {
       <directionalLight position={[-4, 1, -3]} intensity={0.55} color="#67e8f9" />
       <pointLight position={[2, 3, 4]} intensity={0.85} color="#22d3ee" />
       <pointLight position={[-3, -1, 2]} intensity={0.45} color="#a5f3fc" />
-      <LogoModel
-        mouse={mouse}
-        sending={sending}
-        sendProgress={sendProgress}
-        interactive={interactive}
-      />
+      <LogoModel mouse={mouse} sending={sending} sendProgress={sendProgress} />
     </>
   );
 }
 
 export default function Logo3D({
   sending = false,
-  interactive = true,
   className = "",
   onSendProgress,
 }) {
   const containerRef = useRef(null);
-  const [mouse, setMouse] = useState({ x: 0, y: 0 });
+  const [mouse] = useState({ x: 0, y: 0 });
   const [sendProgress, setSendProgress] = useState(0);
   const sendStartRef = useRef(null);
 
@@ -169,24 +145,8 @@ export default function Logo3D({
     return () => cancelAnimationFrame(raf);
   }, [sending, onSendProgress]);
 
-  const handlePointerMove = (e) => {
-    if (!interactive || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-    setMouse({ x, y });
-  };
-
-  const resetMouse = () => setMouse({ x: 0, y: 0 });
-
   return (
-    <div
-      ref={containerRef}
-      className={className}
-      onPointerMove={handlePointerMove}
-      onPointerLeave={resetMouse}
-      aria-hidden
-    >
+    <div ref={containerRef} className={className} aria-hidden>
       <ModelErrorBoundary>
         <Canvas
           dpr={[1, 2]}
@@ -196,8 +156,8 @@ export default function Logo3D({
             powerPreference: "high-performance",
           }}
           camera={{
-            position: [0, 0, sending ? 5.4 : 2.75],
-            fov: sending ? 52 : 48,
+            position: [0, 0, sending ? 4.1 : 2.75],
+            fov: sending ? 48 : 48,
             near: 0.1,
             far: 100,
           }}
@@ -208,7 +168,6 @@ export default function Logo3D({
               mouse={mouse}
               sending={sending}
               sendProgress={sendProgress}
-              interactive={interactive}
             />
           </Suspense>
         </Canvas>
