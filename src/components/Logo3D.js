@@ -25,9 +25,14 @@ class ModelErrorBoundary extends React.Component {
 
 const MODEL_URL = "/models/3d-logo.glb";
 
+const MODE_CONFIG = {
+  send: { scale: 7.2, cameraZ: 2.85, fov: 42 },
+  corner: { scale: 4.4, cameraZ: 3.35, fov: 44 },
+};
+
 useGLTF.preload(MODEL_URL);
 
-function centerAndScale(object, sizeTarget = 5.5) {
+function centerAndScale(object, sizeTarget) {
   const box = new THREE.Box3().setFromObject(object);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
@@ -38,14 +43,15 @@ function centerAndScale(object, sizeTarget = 5.5) {
   return scale;
 }
 
-function LogoModel({ mouse, sending, sendProgress }) {
+function LogoModel({ mode, sendProgress }) {
   const group = useRef();
   const baseScaleRef = useRef(1);
   const { scene } = useGLTF(MODEL_URL);
+  const config = MODE_CONFIG[mode] || MODE_CONFIG.corner;
 
   const model = useMemo(() => {
     const clone = scene.clone(true);
-    baseScaleRef.current = centerAndScale(clone, sending ? 5.25 : 6.5);
+    baseScaleRef.current = centerAndScale(clone, config.scale);
     clone.traverse((child) => {
       if (child.isMesh && child.material) {
         const mats = Array.isArray(child.material)
@@ -57,41 +63,40 @@ function LogoModel({ mouse, sending, sendProgress }) {
             mat.opacity = 0.98;
           }
           if (mat.metalness !== undefined) {
-            mat.metalness = Math.min(mat.metalness + 0.15, 1);
-            mat.roughness = Math.max((mat.roughness ?? 0.5) - 0.15, 0.08);
+            mat.metalness = Math.min(mat.metalness + 0.25, 1);
+            mat.roughness = Math.max((mat.roughness ?? 0.5) - 0.22, 0.06);
           }
           if (mat.emissive) {
-            mat.emissive.set("#0e7490");
-            mat.emissiveIntensity = 0.12;
+            mat.emissive.set("#0891b2");
+            mat.emissiveIntensity = mode === "send" ? 0.18 : 0.1;
           }
         });
       }
     });
     return clone;
-  }, [scene, sending]);
+  }, [scene, config.scale, mode]);
 
   useFrame((state, delta) => {
     if (!group.current) return;
     const t = state.clock.elapsedTime;
     const base = baseScaleRef.current;
 
-    if (sending) {
-      const lift = sendProgress * 1.6;
-      const spin = sendProgress * Math.PI * 2.5;
+    if (mode === "send") {
       const fade =
-        sendProgress > 0.78
-          ? 1 - ((sendProgress - 0.78) / 0.22) * 0.92
+        sendProgress > 0.85
+          ? 1 - ((sendProgress - 0.85) / 0.15) * 0.95
           : 1;
-      group.current.position.y = lift;
-      group.current.rotation.y = spin + t * 0.15;
-      group.current.rotation.x = 0.1 + Math.sin(t * 0.4) * 0.05;
-      group.current.scale.setScalar(base * (1 + sendProgress * 0.08) * fade);
+      group.current.position.y = Math.sin(t * 0.45) * 0.04;
+      group.current.rotation.y = 0.4 + t * 0.12;
+      group.current.rotation.x = 0.14 + Math.sin(t * 0.3) * 0.04;
+      group.current.rotation.z = 0;
+      group.current.scale.setScalar(base * fade);
       return;
     }
 
-    group.current.position.y = Math.sin(t * 0.6) * 0.05;
-    group.current.rotation.y += 0.35 * delta;
-    group.current.rotation.x = 0.1 + Math.sin(t * 0.35) * 0.06;
+    group.current.position.y = Math.sin(t * 0.55) * 0.035;
+    group.current.rotation.y += 0.18 * delta;
+    group.current.rotation.x = 0.12 + Math.sin(t * 0.4) * 0.05;
     group.current.scale.setScalar(base);
   });
 
@@ -102,27 +107,35 @@ function LogoModel({ mouse, sending, sendProgress }) {
   );
 }
 
-function Scene({ mouse, sending, sendProgress }) {
+function Scene({ mode, sendProgress }) {
   return (
     <>
-      <Environment preset="city" />
-      <ambientLight intensity={0.55} />
-      <directionalLight position={[4, 6, 5]} intensity={1.35} color="#ffffff" />
-      <directionalLight position={[-4, 1, -3]} intensity={0.55} color="#67e8f9" />
-      <pointLight position={[2, 3, 4]} intensity={0.85} color="#22d3ee" />
-      <pointLight position={[-3, -1, 2]} intensity={0.45} color="#a5f3fc" />
-      <LogoModel mouse={mouse} sending={sending} sendProgress={sendProgress} />
+      <Environment preset="studio" />
+      <ambientLight intensity={0.45} />
+      <directionalLight position={[5, 8, 6]} intensity={1.6} color="#ffffff" />
+      <directionalLight position={[-5, 2, -4]} intensity={0.7} color="#67e8f9" />
+      <pointLight position={[3, 4, 5]} intensity={1.1} color="#22d3ee" />
+      <pointLight position={[-4, -2, 3]} intensity={0.55} color="#f0abfc" />
+      <spotLight
+        position={[0, 6, 2]}
+        angle={0.35}
+        penumbra={0.8}
+        intensity={0.9}
+        color="#e0f2fe"
+      />
+      <LogoModel mode={mode} sendProgress={sendProgress} />
     </>
   );
 }
 
 export default function Logo3D({
+  variant = "corner",
   sending = false,
   className = "",
   onSendProgress,
 }) {
-  const containerRef = useRef(null);
-  const [mouse] = useState({ x: 0, y: 0 });
+  const mode = sending ? "send" : variant;
+  const config = MODE_CONFIG[mode] || MODE_CONFIG.corner;
   const [sendProgress, setSendProgress] = useState(0);
   const sendStartRef = useRef(null);
 
@@ -146,11 +159,7 @@ export default function Logo3D({
   }, [sending, onSendProgress]);
 
   return (
-    <div
-      ref={containerRef}
-      className={`${className} pointer-events-none`}
-      aria-hidden
-    >
+    <div className={`${className} pointer-events-none`} aria-hidden>
       <ModelErrorBoundary>
         <Canvas
           dpr={[1, 2]}
@@ -160,19 +169,15 @@ export default function Logo3D({
             powerPreference: "high-performance",
           }}
           camera={{
-            position: [0, 0, sending ? 3.55 : 2.75],
-            fov: sending ? 46 : 48,
+            position: [0, 0, config.cameraZ],
+            fov: config.fov,
             near: 0.1,
             far: 100,
           }}
           style={{ background: "transparent", width: "100%", height: "100%" }}
         >
           <Suspense fallback={null}>
-            <Scene
-              mouse={mouse}
-              sending={sending}
-              sendProgress={sendProgress}
-            />
+            <Scene mode={mode} sendProgress={sendProgress} />
           </Suspense>
         </Canvas>
       </ModelErrorBoundary>

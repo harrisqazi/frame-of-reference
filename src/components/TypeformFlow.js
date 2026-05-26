@@ -179,10 +179,8 @@ export default function TypeformFlow({ setStep }) {
   }, [qaInputVisible, qaIndex]);
 
   useEffect(() => {
-    if (phase === "draw") {
-      import("@/components/Logo3D");
-    }
-  }, [phase]);
+    import("@/components/Logo3D");
+  }, []);
 
   useEffect(() => {
     setBranchAnswers(qaHistory.map((t) => t.answer));
@@ -333,13 +331,17 @@ export default function TypeformFlow({ setStep }) {
 
   return (
     <>
+      {!sendSplash && (
+        <Logo3D variant="corner" className="manifestation-logo-corner" />
+      )}
+
       {sendSplash && (
         <div className="fixed inset-0 z-[60] manifestation-send-overlay pointer-events-none">
-          <Logo3D sending className="manifestation-logo-send pointer-events-none" />
+          <Logo3D sending className="manifestation-logo-send" />
         </div>
       )}
 
-      <div className="relative z-10 max-w-[420px] w-11/12 text-black pt-6 pb-24 font-mono mx-auto bg-gray-100/95 backdrop-blur-sm">
+      <div className="relative z-10 max-w-[420px] w-11/12 text-black pt-24 sm:pt-8 pb-24 font-mono mx-auto bg-gray-100/95 backdrop-blur-sm">
 
       {phase === "intro" && (
         <div>
