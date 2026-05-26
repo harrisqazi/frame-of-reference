@@ -48,7 +48,7 @@ function LogoModel({ mouse, sending, sendProgress, interactive }) {
   useEffect(() => {
     if (preparedRef.current) return;
     preparedRef.current = true;
-    baseScaleRef.current = centerAndScale(scene, sending ? 5 : 6.5);
+    baseScaleRef.current = centerAndScale(scene, sending ? 3.4 : 6.5);
     scene.traverse((child) => {
       if (child.isMesh && child.material) {
         const mats = Array.isArray(child.material)
@@ -94,7 +94,7 @@ function LogoModel({ mouse, sending, sendProgress, interactive }) {
       group.current.position.y = lift;
       group.current.rotation.y = spin;
       group.current.rotation.x = 0.12 + mouse.y * 0.08;
-      group.current.scale.setScalar(base * (1 + sendProgress * 0.35) * fade);
+      group.current.scale.setScalar(base * (1 + sendProgress * 0.12) * fade);
       return;
     }
 
@@ -196,8 +196,8 @@ export default function Logo3D({
             powerPreference: "high-performance",
           }}
           camera={{
-            position: [0, 0, sending ? 3.2 : 2.75],
-            fov: sending ? 42 : 48,
+            position: [0, 0, sending ? 5.4 : 2.75],
+            fov: sending ? 52 : 48,
             near: 0.1,
             far: 100,
           }}

@@ -295,13 +295,6 @@ export default function TypeformFlow({ setStep }) {
 
   return (
     <>
-      {!sendSplash && (
-        <Logo3D
-          interactive
-          className="manifestation-logo-hero"
-        />
-      )}
-
       <div
         className={`fixed inset-0 z-50 manifestation-send-overlay transition-opacity duration-500 ${
           sendSplash ? "opacity-100" : "opacity-0 pointer-events-none"
