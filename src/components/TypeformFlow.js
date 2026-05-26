@@ -185,6 +185,10 @@ export default function TypeformFlow({ setStep }) {
   }, [phase]);
 
   useEffect(() => {
+    setBranchAnswers(qaHistory.map((t) => t.answer));
+  }, [qaHistory]);
+
+  useEffect(() => {
     if (phase !== "qa") return;
     const t = setTimeout(() => {
       qaActiveRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -213,35 +217,24 @@ export default function TypeformFlow({ setStep }) {
     });
   };
 
-  const skipQa = () => {
-    const nextHistory = [
-      ...qaHistory,
-      { question: activeQuestion, answer: "" },
-    ];
-    setQaHistory(nextHistory);
-    setBranchAnswers(nextHistory.map((t) => t.answer));
+  const advanceAfterAnswer = (answerText) => {
+    setQaHistory((history) => [
+      ...history,
+      { question: activeQuestion, answer: answerText },
+    ]);
     setQaInput("");
-    if (qaIndex + 1 >= currentBranchQuestions.length) {
-      setPhase("draw");
-      return;
-    }
-    setQaIndex((i) => i + 1);
+    setQaIndex((i) => {
+      if (i + 1 >= currentBranchQuestions.length) {
+        setPhase("draw");
+        return i;
+      }
+      return i + 1;
+    });
   };
 
-  const proceedQa = () => {
-    const nextHistory = [
-      ...qaHistory,
-      { question: activeQuestion, answer: qaInput.trim() },
-    ];
-    setQaHistory(nextHistory);
-    setBranchAnswers(nextHistory.map((t) => t.answer));
-    setQaInput("");
-    if (qaIndex + 1 >= currentBranchQuestions.length) {
-      setPhase("draw");
-      return;
-    }
-    setQaIndex((i) => i + 1);
-  };
+  const skipQa = () => advanceAfterAnswer("");
+
+  const proceedQa = () => advanceAfterAnswer(qaInput.trim());
 
   const getCanvasContext = () => {
     const c = canvasRef.current;
@@ -441,85 +434,94 @@ export default function TypeformFlow({ setStep }) {
       )}
 
       {phase === "qa" && (
-        <div className="pb-12 space-y-8">
-          {currentBranchQuestions.map((question, i) => {
-            if (i > qaIndex) return null;
-            const isActive = i === qaIndex;
-            const turn = qaHistory[i];
+        <div className="pb-12">
+          {qaIndex > 0 && (
+            <p className="text-xs uppercase tracking-wide text-gray-500 mb-4">
+              Your answers so far — scroll up to edit
+            </p>
+          )}
+          <ol className="space-y-8 list-none m-0 p-0">
+            {currentBranchQuestions.map((question, i) => {
+              if (i > qaIndex) return null;
+              const isPast = i < qaIndex;
+              const turn = qaHistory[i];
 
-            if (!isActive && turn) {
-              return (
-                <div
-                  key={`qa-done-${i}`}
-                  className="pb-6 border-b border-gray-300"
-                >
-                  <p className="mb-2 font-medium text-gray-900">{turn.question}</p>
-                  <label className="block text-xs text-gray-500 mb-1">
-                    Your answer
-                  </label>
-                  <textarea
-                    value={turn.answer}
-                    onChange={(e) => updateHistoryAnswer(i, e.target.value)}
-                    rows={3}
-                    className="w-full resize-none bg-white border border-gray-200 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 text-gray-800"
-                  />
-                </div>
-              );
-            }
-
-            if (!isActive) return null;
-
-            return (
-              <div
-                key={`qa-active-${i}`}
-                ref={qaActiveRef}
-                className="scroll-mt-8 pb-4"
-              >
-                {!qaTypingDone ? (
-                  <p className="mb-2 font-medium text-gray-900">
-                    {qaTyped}
-                    <span className="text-cyan-600 ml-0.5">_</span>
-                  </p>
-                ) : (
-                  <p className="mb-2 font-medium text-gray-900">{question}</p>
-                )}
-                {qaInputVisible && (
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start w-full mt-2">
+              if (isPast) {
+                return (
+                  <li
+                    key={`qa-past-${i}`}
+                    className="pb-6 border-b border-gray-300"
+                  >
+                    <p className="mb-1 text-xs text-gray-500">Question {i + 1}</p>
+                    <p className="mb-2 font-medium text-gray-900">
+                      {turn?.question || question}
+                    </p>
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Your answer
+                    </label>
                     <textarea
-                      ref={qaInputRef}
-                      value={qaInput}
-                      onChange={(e) => setQaInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          if (qaInput.trim()) proceedQa();
-                        }
-                      }}
+                      value={turn?.answer ?? ""}
+                      onChange={(e) => updateHistoryAnswer(i, e.target.value)}
                       rows={3}
-                      className="flex-1 w-full resize-none bg-white border border-gray-200 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 caret-cyan-600"
+                      className="w-full resize-none bg-white border border-gray-200 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 text-gray-800"
                     />
-                    <div className="flex flex-col gap-2 shrink-0">
-                      <button
-                        type="button"
-                        disabled={!qaInput.trim()}
-                        onClick={proceedQa}
-                        className="px-3 py-2 border-2 border-gray-800 disabled:opacity-40"
-                      >
-                        Next
-                      </button>
-                      <button
-                        type="button"
-                        onClick={skipQa}
-                        className="px-3 py-2 border border-gray-400 text-gray-600 text-sm hover:bg-gray-50"
-                      >
-                        Skip question
-                      </button>
+                  </li>
+                );
+              }
+
+              return (
+                <li
+                  key={`qa-active-${i}`}
+                  ref={qaActiveRef}
+                  className="scroll-mt-8 pb-4 list-none"
+                >
+                  <p className="mb-1 text-xs text-cyan-700">Question {i + 1}</p>
+                  {!qaTypingDone ? (
+                    <p className="mb-2 font-medium text-gray-900">
+                      {qaTyped}
+                      <span className="text-cyan-600 ml-0.5">_</span>
+                    </p>
+                  ) : (
+                    <p className="mb-2 font-medium text-gray-900">{question}</p>
+                  )}
+                  {qaInputVisible && (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start w-full mt-2">
+                      <textarea
+                        ref={qaInputRef}
+                        value={qaInput}
+                        onChange={(e) => setQaInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            if (qaInput.trim()) proceedQa();
+                          }
+                        }}
+                        rows={3}
+                        className="flex-1 w-full resize-none bg-white border border-gray-200 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 caret-cyan-600"
+                      />
+                      <div className="flex flex-col gap-2 shrink-0">
+                        <button
+                          type="button"
+                          disabled={!qaInput.trim()}
+                          onClick={proceedQa}
+                          className="px-3 py-2 border-2 border-gray-800 disabled:opacity-40"
+                        >
+                          Next
+                        </button>
+                        <button
+                          type="button"
+                          onClick={skipQa}
+                          className="px-3 py-2 border border-gray-400 text-gray-600 text-sm hover:bg-gray-50"
+                        >
+                          Skip question
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                  )}
+                </li>
+              );
+            })}
+          </ol>
         </div>
       )}
 

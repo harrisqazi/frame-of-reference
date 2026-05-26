@@ -45,7 +45,7 @@ function LogoModel({ mouse, sending, sendProgress }) {
 
   const model = useMemo(() => {
     const clone = scene.clone(true);
-    baseScaleRef.current = centerAndScale(clone, sending ? 4.6 : 6.5);
+    baseScaleRef.current = centerAndScale(clone, sending ? 5.25 : 6.5);
     clone.traverse((child) => {
       if (child.isMesh && child.material) {
         const mats = Array.isArray(child.material)
@@ -160,8 +160,8 @@ export default function Logo3D({
             powerPreference: "high-performance",
           }}
           camera={{
-            position: [0, 0, sending ? 4.1 : 2.75],
-            fov: sending ? 48 : 48,
+            position: [0, 0, sending ? 3.55 : 2.75],
+            fov: sending ? 46 : 48,
             near: 0.1,
             far: 100,
           }}
