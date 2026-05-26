@@ -146,7 +146,11 @@ export default function Logo3D({
   }, [sending, onSendProgress]);
 
   return (
-    <div ref={containerRef} className={className} aria-hidden>
+    <div
+      ref={containerRef}
+      className={`${className} pointer-events-none`}
+      aria-hidden
+    >
       <ModelErrorBoundary>
         <Canvas
           dpr={[1, 2]}

@@ -179,8 +179,17 @@ export default function TypeformFlow({ setStep }) {
   }, [qaInputVisible, qaIndex]);
 
   useEffect(() => {
+    if (phase === "draw") {
+      import("@/components/Logo3D");
+    }
+  }, [phase]);
+
+  useEffect(() => {
     if (phase !== "qa") return;
-    qaActiveRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const t = setTimeout(() => {
+      qaActiveRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }, 80);
+    return () => clearTimeout(t);
   }, [phase, qaIndex, qaInputVisible, qaTypingDone, qaHistory.length]);
 
   const proceedCategory = (key) => {
@@ -279,21 +288,32 @@ export default function TypeformFlow({ setStep }) {
   };
 
   const submitAll = (drawingMode = "canvas") => {
-    setSubmitting(true);
-    setSendSplash(true);
+    if (submitting) return;
 
     let drawingPayload = null;
     if (drawingMode === "canvas" && canvasRef.current) {
-      drawingPayload = canvasRef.current.toDataURL("image/png");
+      try {
+        drawingPayload = canvasRef.current.toDataURL("image/png");
+      } catch (err) {
+        console.warn("Could not export sketch:", err);
+      }
     }
+
+    const answers =
+      qaHistory.length > 0
+        ? qaHistory.map((t) => t.answer)
+        : branchAnswers;
 
     const payload = {
       idea: idea.trim(),
       category: category === "other" ? "Something else" : category || "",
       branchQuestions: currentBranchQuestions,
-      branchAnswers,
+      branchAnswers: answers,
       drawingDataUrl: drawingPayload,
     };
+
+    setSubmitting(true);
+    setSendSplash(true);
 
     fetch("/api/manifestation", {
       method: "POST",
@@ -313,26 +333,20 @@ export default function TypeformFlow({ setStep }) {
 
     setTimeout(() => {
       setSubmitting(false);
+      setSendSplash(false);
       setStep(7);
     }, 4200);
   };
 
   return (
     <>
-      <div
-        className={`fixed inset-0 z-50 manifestation-send-overlay transition-opacity duration-500 ${
-          sendSplash ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-      >
-        {(sendSplash || phase === "draw") && (
-          <Logo3D
-            sending={sendSplash}
-            className="manifestation-logo-send"
-          />
-        )}
-      </div>
+      {sendSplash && (
+        <div className="fixed inset-0 z-[60] manifestation-send-overlay pointer-events-none">
+          <Logo3D sending className="manifestation-logo-send pointer-events-none" />
+        </div>
+      )}
 
-      <div className="relative z-10 max-w-[420px] w-11/12 text-black pt-6 pb-24 font-mono min-h-screen mx-auto bg-gray-100/90 backdrop-blur-sm">
+      <div className="relative z-10 max-w-[420px] w-11/12 text-black pt-6 pb-24 font-mono mx-auto bg-gray-100/95 backdrop-blur-sm">
 
       {phase === "intro" && (
         <div>
@@ -427,71 +441,90 @@ export default function TypeformFlow({ setStep }) {
       )}
 
       {phase === "qa" && (
-        <div className="pb-8">
-          {qaHistory.map((turn, i) => (
-            <div key={`qa-${i}`} className="mb-8 pb-6 border-b border-gray-200">
-              <p className="mb-2 text-gray-900">{turn.question}</p>
-              <label className="block text-xs text-gray-500 mb-1">
-                Your answer (editable)
-              </label>
-              <textarea
-                value={turn.answer}
-                onChange={(e) => updateHistoryAnswer(i, e.target.value)}
-                rows={3}
-                className="w-full resize-none bg-gray-100 border-0 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 text-gray-700"
-              />
-            </div>
-          ))}
+        <div className="pb-12 space-y-8">
+          {currentBranchQuestions.map((question, i) => {
+            if (i > qaIndex) return null;
+            const isActive = i === qaIndex;
+            const turn = qaHistory[i];
 
-          <div ref={qaActiveRef} className="scroll-mt-24">
-            {!qaTypingDone ? (
-              <p className="mb-2">
-                {qaTyped}
-                <span className="text-cyan-600 ml-0.5">_</span>
-              </p>
-            ) : (
-              <p className="mb-2 text-gray-900">{activeQuestion}</p>
-            )}
-            {qaInputVisible && (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start w-full mt-2">
-                <textarea
-                  ref={qaInputRef}
-                  value={qaInput}
-                  onChange={(e) => setQaInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      if (qaInput.trim()) proceedQa();
-                    }
-                  }}
-                  rows={3}
-                  className="flex-1 w-full resize-none bg-gray-100 border-0 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 caret-cyan-600"
-                />
-                <div className="flex flex-col gap-2 shrink-0">
-                  <button
-                    type="button"
-                    disabled={!qaInput.trim()}
-                    onClick={proceedQa}
-                    className="px-3 py-2 border-2 border-gray-800 disabled:opacity-40"
-                  >
-                    Next
-                  </button>
-                  <button
-                    type="button"
-                    onClick={skipQa}
-                    className="px-3 py-2 border border-gray-400 text-gray-600 text-sm hover:bg-gray-50"
-                  >
-                    Skip question
-                  </button>
+            if (!isActive && turn) {
+              return (
+                <div
+                  key={`qa-done-${i}`}
+                  className="pb-6 border-b border-gray-300"
+                >
+                  <p className="mb-2 font-medium text-gray-900">{turn.question}</p>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Your answer
+                  </label>
+                  <textarea
+                    value={turn.answer}
+                    onChange={(e) => updateHistoryAnswer(i, e.target.value)}
+                    rows={3}
+                    className="w-full resize-none bg-white border border-gray-200 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 text-gray-800"
+                  />
                 </div>
+              );
+            }
+
+            if (!isActive) return null;
+
+            return (
+              <div
+                key={`qa-active-${i}`}
+                ref={qaActiveRef}
+                className="scroll-mt-8 pb-4"
+              >
+                {!qaTypingDone ? (
+                  <p className="mb-2 font-medium text-gray-900">
+                    {qaTyped}
+                    <span className="text-cyan-600 ml-0.5">_</span>
+                  </p>
+                ) : (
+                  <p className="mb-2 font-medium text-gray-900">{question}</p>
+                )}
+                {qaInputVisible && (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start w-full mt-2">
+                    <textarea
+                      ref={qaInputRef}
+                      value={qaInput}
+                      onChange={(e) => setQaInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          if (qaInput.trim()) proceedQa();
+                        }
+                      }}
+                      rows={3}
+                      className="flex-1 w-full resize-none bg-white border border-gray-200 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 caret-cyan-600"
+                    />
+                    <div className="flex flex-col gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={!qaInput.trim()}
+                        onClick={proceedQa}
+                        className="px-3 py-2 border-2 border-gray-800 disabled:opacity-40"
+                      >
+                        Next
+                      </button>
+                      <button
+                        type="button"
+                        onClick={skipQa}
+                        className="px-3 py-2 border border-gray-400 text-gray-600 text-sm hover:bg-gray-50"
+                      >
+                        Skip question
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })}
         </div>
       )}
 
       {phase === "draw" && (
-        <div>
+        <div className="relative z-20">
           <p className="mb-2">
             Want to sketch your idea? Use the pad below—or skip.
           </p>
