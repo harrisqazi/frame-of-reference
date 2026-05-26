@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import dynamic from "next/dynamic";
+
+const Logo3D = dynamic(() => import("@/components/Logo3D"), { ssr: false });
 
 const SCRIPT = [
   { action: "type", text: "Remember that dream you held.", delay: 40 },
@@ -57,6 +60,7 @@ const TerminalSimulator = ({ step, setStep }) => {
   }, []);
 
   useEffect(() => {
+    import("@/components/Logo3D");
     const initialDelayId = setTimeout(() => setScriptReady(true), 800);
     return () => clearTimeout(initialDelayId);
   }, []);
@@ -255,6 +259,9 @@ const TerminalSimulator = ({ step, setStep }) => {
             {flashOverlay}
           </p>
         </div>
+      )}
+      {step === 0 && !flashOverlay && (
+        <Logo3D variant="corner" className="manifestation-logo-corner" />
       )}
       {step === 0 && (
         <>

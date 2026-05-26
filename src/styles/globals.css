@@ -16,20 +16,23 @@
 
 .manifestation-send-overlay {
   pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: radial-gradient(
-    ellipse 70% 55% at 50% 45%,
-    rgba(125, 211, 252, 0.12) 0%,
-    rgba(55, 125, 165, 0.06) 45%,
-    transparent 72%
+    ellipse 75% 70% at 50% 50%,
+    rgba(125, 211, 252, 0.14) 0%,
+    rgba(55, 125, 165, 0.06) 50%,
+    transparent 75%
   );
 }
 
 .manifestation-logo-send {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  position: relative;
+  width: min(92vmin, 820px);
+  height: min(92vmin, 820px);
   z-index: 2;
+  flex-shrink: 0;
 }
 
 .manifestation-logo-corner {
@@ -38,7 +41,7 @@
   left: 1.25rem;
   width: clamp(130px, 20vw, 200px);
   height: clamp(130px, 20vw, 200px);
-  z-index: 25;
+  z-index: 35;
   pointer-events: none;
   filter: drop-shadow(0 10px 28px rgba(8, 145, 178, 0.25));
 }
@@ -56,9 +59,9 @@
   content: "";
   position: absolute;
   left: 50%;
-  top: 48%;
-  width: min(95vw, 720px);
-  height: min(95vw, 720px);
+  top: 50%;
+  width: 100%;
+  height: 100%;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: radial-gradient(

@@ -1,5 +1,5 @@
 import React, { Suspense, useRef, useState, useEffect, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useGLTF, Environment } from "@react-three/drei";
 import * as THREE from "three";
 
@@ -26,7 +26,7 @@ class ModelErrorBoundary extends React.Component {
 const MODEL_URL = "/models/3d-logo.glb";
 
 const MODE_CONFIG = {
-  send: { scale: 7.2, cameraZ: 2.85, fov: 42 },
+  send: { scale: 6.8, fov: 42 },
   corner: { scale: 4.4, cameraZ: 3.35, fov: 44 },
 };
 
@@ -41,6 +41,21 @@ function centerAndScale(object, sizeTarget) {
   object.position.sub(center);
   object.scale.setScalar(scale);
   return scale;
+}
+
+function SendCamera({ sendProgress }) {
+  const { camera } = useThree();
+  const startZ = 5.4;
+  const endZ = 2.5;
+
+  useFrame(() => {
+    const eased = sendProgress * sendProgress;
+    camera.position.set(0, 0, THREE.MathUtils.lerp(startZ, endZ, eased));
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+  });
+
+  return null;
 }
 
 function LogoModel({ mode, sendProgress }) {
@@ -83,14 +98,15 @@ function LogoModel({ mode, sendProgress }) {
 
     if (mode === "send") {
       const fade =
-        sendProgress > 0.85
-          ? 1 - ((sendProgress - 0.85) / 0.15) * 0.95
+        sendProgress > 0.88
+          ? 1 - ((sendProgress - 0.88) / 0.12) * 0.95
           : 1;
-      group.current.position.y = Math.sin(t * 0.45) * 0.04;
-      group.current.rotation.y = 0.4 + t * 0.12;
-      group.current.rotation.x = 0.14 + Math.sin(t * 0.3) * 0.04;
+      const zoomScale = 0.82 + sendProgress * 0.28;
+      group.current.position.set(0, 0, 0);
+      group.current.rotation.y = 0.45 + t * 0.1;
+      group.current.rotation.x = 0.12 + Math.sin(t * 0.28) * 0.03;
       group.current.rotation.z = 0;
-      group.current.scale.setScalar(base * fade);
+      group.current.scale.setScalar(base * zoomScale * fade);
       return;
     }
 
@@ -123,6 +139,7 @@ function Scene({ mode, sendProgress }) {
         intensity={0.9}
         color="#e0f2fe"
       />
+      {mode === "send" && <SendCamera sendProgress={sendProgress} />}
       <LogoModel mode={mode} sendProgress={sendProgress} />
     </>
   );
@@ -158,6 +175,8 @@ export default function Logo3D({
     return () => cancelAnimationFrame(raf);
   }, [sending, onSendProgress]);
 
+  const cameraZ = mode === "send" ? 5.4 : config.cameraZ;
+
   return (
     <div className={`${className} pointer-events-none`} aria-hidden>
       <ModelErrorBoundary>
@@ -169,7 +188,7 @@ export default function Logo3D({
             powerPreference: "high-performance",
           }}
           camera={{
-            position: [0, 0, config.cameraZ],
+            position: [0, 0, cameraZ],
             fov: config.fov,
             near: 0.1,
             far: 100,
