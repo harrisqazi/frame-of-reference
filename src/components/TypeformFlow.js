@@ -1,8 +1,14 @@
 import React, { useEffect, useState, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { BRANCH_QUESTIONS } from "@/data/manifestationQuestions";
 
-const Logo3D = dynamic(() => import("@/components/Logo3D"), { ssr: false });
+const Logo3D = dynamic(() => import("@/components/Logo3D"), {
+  ssr: false,
+  loading: () => (
+    <div className="manifestation-logo-fallback manifestation-logo-fallback--loading" />
+  ),
+});
 
 const CYCLING_IDEAS = [
   "Recycling infrastructure in Guadalajara",
@@ -83,6 +89,7 @@ export default function TypeformFlow({ setStep }) {
 
   const [submitting, setSubmitting] = useState(false);
   const [sendSplash, setSendSplash] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
 
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
@@ -184,6 +191,7 @@ export default function TypeformFlow({ setStep }) {
   }, [branchInputVisible, flowStep]);
 
   useEffect(() => {
+    setPortalReady(true);
     import("@/components/Logo3D");
   }, []);
 
@@ -351,18 +359,23 @@ export default function TypeformFlow({ setStep }) {
         <Logo3D variant="corner" className="manifestation-logo-corner" />
       )}
 
-      {sendSplash && (
-        <div
-          className="fixed inset-0 z-[100] manifestation-send-overlay pointer-events-none"
-          aria-live="polite"
-          aria-label="Sending your manifestation"
-        >
-          <div className="manifestation-logo-stage">
-            <Logo3D sending className="manifestation-logo-send" />
-            <p className="manifestation-send-caption">Sending your manifestation…</p>
-          </div>
-        </div>
-      )}
+      {portalReady &&
+        sendSplash &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[9999] manifestation-send-overlay manifestation-send-overlay--active pointer-events-none"
+            aria-live="polite"
+            aria-label="Sending your manifestation"
+          >
+            <div className="manifestation-logo-stage">
+              <Logo3D sending className="manifestation-logo-send" />
+              <p className="manifestation-send-caption">
+                Sending your manifestation…
+              </p>
+            </div>
+          </div>,
+          document.body
+        )}
 
       <div className="relative z-20 max-w-[420px] w-11/12 text-black pt-8 pb-24 font-mono mx-auto">
         {phase === "intro" && (

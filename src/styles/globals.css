@@ -27,6 +27,16 @@
   );
 }
 
+.manifestation-send-overlay--active {
+  background: radial-gradient(
+      ellipse 80% 75% at 50% 45%,
+      rgba(125, 211, 252, 0.22) 0%,
+      rgba(55, 125, 165, 0.1) 45%,
+      transparent 72%
+    ),
+    rgba(248, 250, 252, 0.55);
+}
+
 .manifestation-logo-stage {
   position: relative;
   display: flex;
@@ -45,11 +55,13 @@
 
 .manifestation-logo-send {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  min-width: 280px;
-  min-height: 280px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(88vmin, 680px);
+  height: min(88vmin, 680px);
+  max-width: 100%;
+  max-height: 100%;
   z-index: 2;
 }
 
