@@ -27,49 +27,118 @@
   );
 }
 
-.manifestation-logo-send {
+.manifestation-logo-stage {
   position: relative;
-  width: 100vw;
-  height: 100vh;
-  max-width: none;
-  max-height: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: min(92vmin, 720px);
+  height: min(72vmin, 720px);
+  border: 1px solid rgba(8, 145, 178, 0.35);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  overflow: visible;
   z-index: 2;
-  flex-shrink: 0;
+  box-shadow: 0 0 56px rgba(34, 211, 238, 0.22);
+}
+
+.manifestation-logo-send {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 280px;
+  min-height: 280px;
+  z-index: 2;
+}
+
+.manifestation-send-caption {
+  position: absolute;
+  bottom: -2.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(8, 145, 178, 0.85);
+  white-space: nowrap;
+  z-index: 3;
 }
 
 .manifestation-logo-corner {
   position: fixed;
   top: 1rem;
   left: 1rem;
-  width: clamp(280px, 52vw, 500px);
-  height: clamp(280px, 52vw, 500px);
-  z-index: 35;
+  width: clamp(140px, 22vw, 220px);
+  height: clamp(140px, 22vw, 220px);
+  z-index: 15;
   pointer-events: none;
-  filter: drop-shadow(0 12px 32px rgba(8, 145, 178, 0.35));
+  filter: drop-shadow(0 10px 24px rgba(8, 145, 178, 0.3));
 }
 
 @media (max-width: 640px) {
   .manifestation-logo-corner {
     top: 0.5rem;
     left: 0.5rem;
-    width: min(62vw, 280px);
-    height: min(62vw, 280px);
+    width: 120px;
+    height: 120px;
+  }
+
+  .manifestation-logo-stage {
+    width: min(94vmin, 520px);
+    height: min(58vmin, 520px);
+  }
+
+  .manifestation-send-caption {
+    bottom: -2rem;
+    font-size: 0.65rem;
   }
 }
 
-.manifestation-logo-send::before {
+.manifestation-logo-send .manifestation-logo-fallback,
+.manifestation-logo-corner .manifestation-logo-fallback {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.manifestation-logo-fallback {
+  width: min(52vmin, 320px);
+  height: min(52vmin, 320px);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(125, 211, 252, 0.45) 0%,
+    rgba(34, 211, 238, 0.12) 55%,
+    transparent 72%
+  );
+  animation: logo-glow-pulse 1.6s ease-in-out infinite;
+}
+
+.manifestation-logo-fallback--loading {
+  border: 2px solid rgba(34, 211, 238, 0.35);
+  border-top-color: rgba(8, 145, 178, 0.9);
+  background: transparent;
+  animation: logo-glow-pulse 1.2s ease-in-out infinite;
+}
+
+.manifestation-logo-stage::before {
   content: "";
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 100%;
-  height: 100%;
+  width: 88%;
+  height: 88%;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    rgba(125, 211, 252, 0.22) 0%,
-    transparent 68%
+    rgba(125, 211, 252, 0.28) 0%,
+    transparent 70%
   );
   animation: logo-glow-pulse 2.8s ease-in-out infinite;
   pointer-events: none;

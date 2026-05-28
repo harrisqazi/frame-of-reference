@@ -1,6 +1,6 @@
 import React, { Suspense, useRef, useState, useEffect, useMemo } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useGLTF, Environment } from "@react-three/drei";
+import { useGLTF, Environment, Html } from "@react-three/drei";
 import * as THREE from "three";
 
 class ModelErrorBoundary extends React.Component {
@@ -18,16 +18,32 @@ class ModelErrorBoundary extends React.Component {
   }
 
   render() {
-    if (this.state.hasError) return null;
+    if (this.state.hasError) {
+      return (
+        <div
+          className="manifestation-logo-fallback"
+          role="img"
+          aria-label="Manifestation logo"
+        />
+      );
+    }
     return this.props.children;
   }
+}
+
+function LogoLoading() {
+  return (
+    <Html center style={{ width: 120, height: 120 }}>
+      <div className="manifestation-logo-fallback manifestation-logo-fallback--loading" />
+    </Html>
+  );
 }
 
 const MODEL_URL = "/models/3d-logo.glb";
 
 const MODE_CONFIG = {
-  send: { scale: 96, fov: 56 },
-  corner: { scale: 64, cameraZ: 1.65, fov: 56 },
+  send: { scale: 7.5, fov: 46 },
+  corner: { scale: 5.5, cameraZ: 3.1, fov: 48 },
 };
 
 useGLTF.preload(MODEL_URL);
@@ -64,8 +80,8 @@ function enhanceMaterials(mats, mode) {
 
 function SendCamera({ sendProgress }) {
   const { camera } = useThree();
-  const startZ = 2.8;
-  const endZ = 0.72;
+  const startZ = 4.2;
+  const endZ = 2.35;
 
   useFrame(() => {
     const eased = 1 - Math.pow(1 - sendProgress, 2);
@@ -107,7 +123,7 @@ function LogoModel({ mode, sendProgress }) {
         sendProgress > 0.88
           ? 1 - ((sendProgress - 0.88) / 0.12) * 0.95
           : 1;
-      const zoomScale = 0.9 + sendProgress * 0.45;
+      const zoomScale = 0.88 + sendProgress * 0.22;
       group.current.position.set(0, 0, 0);
       group.current.rotation.y = 0.45 + t * 0.1;
       group.current.rotation.x = 0.12 + Math.sin(t * 0.28) * 0.03;
@@ -182,10 +198,13 @@ export default function Logo3D({
     return () => cancelAnimationFrame(raf);
   }, [sending, onSendProgress]);
 
-  const cameraZ = mode === "send" ? 2.8 : config.cameraZ;
+  const cameraZ = mode === "send" ? 4.2 : config.cameraZ;
 
   return (
-    <div className={`${className} pointer-events-none`} aria-hidden>
+    <div
+      className={`${className} pointer-events-none relative`}
+      aria-hidden={!sending}
+    >
       <ModelErrorBoundary>
         <Canvas
           dpr={[1, 2]}
@@ -204,7 +223,7 @@ export default function Logo3D({
             far: 200,
           }}
         >
-          <Suspense fallback={null}>
+          <Suspense fallback={<LogoLoading />}>
             <Scene mode={mode} sendProgress={sendProgress} />
           </Suspense>
         </Canvas>

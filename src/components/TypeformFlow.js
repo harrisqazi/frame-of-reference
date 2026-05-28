@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { BRANCH_QUESTIONS } from "@/data/manifestationQuestions";
 
@@ -36,6 +36,10 @@ const CATEGORIES = [
   { key: "other", label: "Something else" },
 ];
 
+const IDEA_QUESTION = "What do you want to create?";
+const CATEGORY_QUESTION =
+  "Is this a product, a service, an API, an invention, a solution—or something else?";
+
 function useTypewriter(text, active, speed = 28) {
   const [out, setOut] = useState("");
   useEffect(() => {
@@ -55,6 +59,10 @@ function useTypewriter(text, active, speed = 28) {
   return out;
 }
 
+function categoryLabel(key) {
+  return CATEGORIES.find((c) => c.key === key)?.label || key || "";
+}
+
 export default function TypeformFlow({ setStep }) {
   const [phase, setPhase] = useState("intro");
   const [introTitleDone, setIntroTitleDone] = useState(false);
@@ -63,16 +71,15 @@ export default function TypeformFlow({ setStep }) {
   const [ideaDeleting, setIdeaDeleting] = useState(false);
   const [ideaWaiting, setIdeaWaiting] = useState(false);
 
+  const [flowStep, setFlowStep] = useState(0);
+  const [history, setHistory] = useState([]);
   const [idea, setIdea] = useState("");
   const [category, setCategory] = useState(null);
 
-  const [qaIndex, setQaIndex] = useState(0);
-  const [branchAnswers, setBranchAnswers] = useState([]);
-  const [qaHistory, setQaHistory] = useState([]);
-  const [qaTyped, setQaTyped] = useState("");
-  const [qaTypingDone, setQaTypingDone] = useState(false);
-  const [qaInput, setQaInput] = useState("");
-  const [qaInputVisible, setQaInputVisible] = useState(false);
+  const [branchTyped, setBranchTyped] = useState("");
+  const [branchTypingDone, setBranchTypingDone] = useState(true);
+  const [branchInput, setBranchInput] = useState("");
+  const [branchInputVisible, setBranchInputVisible] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [sendSplash, setSendSplash] = useState(false);
@@ -80,40 +87,34 @@ export default function TypeformFlow({ setStep }) {
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
   const lastPointRef = useRef(null);
-  const qaInputRef = useRef(null);
-  const qaActiveRef = useRef(null);
+  const activeRef = useRef(null);
+  const branchInputRef = useRef(null);
 
-  const titleText = "What do you want to create?";
-  const titleTyped = useTypewriter(titleText, phase === "intro", 32);
+  const titleTyped = useTypewriter(IDEA_QUESTION, phase === "intro", 32);
 
-  const categoryQuestion =
-    "Is this a product, a service, an API, an invention, a solution—or something else?";
-  const categoryTyped = useTypewriter(
-    categoryQuestion,
-    phase === "category",
-    26
+  const branchQuestions = useMemo(
+    () => (category && BRANCH_QUESTIONS[category] ? BRANCH_QUESTIONS[category] : []),
+    [category]
   );
 
-  const currentBranchQuestions =
-    category && BRANCH_QUESTIONS[category]
-      ? BRANCH_QUESTIONS[category]
-      : [];
-  const activeQuestion =
-    currentBranchQuestions[qaIndex] || "";
+  const branchOffset = 2;
+  const branchIndex = flowStep - branchOffset;
+  const activeBranchQuestion =
+    branchIndex >= 0 ? branchQuestions[branchIndex] || "" : "";
+
+  const showCornerLogo = phase === "draw" && !sendSplash;
 
   useEffect(() => {
     if (phase !== "intro") return;
-    if (titleTyped.length < titleText.length) return;
+    if (titleTyped.length < IDEA_QUESTION.length) return;
     const t = setTimeout(() => setIntroTitleDone(true), 400);
     return () => clearTimeout(t);
-  }, [phase, titleTyped, titleText.length]);
+  }, [phase, titleTyped]);
 
   useEffect(() => {
     if (!introTitleDone || phase !== "intro") return;
-
     const currentIdea = ideaIndex % CYCLING_IDEAS.length;
     const fullText = CYCLING_IDEAS[currentIdea];
-
     if (ideaWaiting) return;
 
     const typeDelay = ideaDeleting ? 8 : 20;
@@ -147,24 +148,26 @@ export default function TypeformFlow({ setStep }) {
   ]);
 
   useEffect(() => {
-    if (phase !== "qa" || !activeQuestion) return;
-    setQaTyped("");
-    setQaTypingDone(false);
-    setQaInput("");
-    setQaInputVisible(false);
+    if (phase !== "flow" || flowStep < branchOffset || !activeBranchQuestion) {
+      return;
+    }
+    setBranchTyped("");
+    setBranchTypingDone(false);
+    setBranchInput("");
+    setBranchInputVisible(false);
 
     let i = 0;
     let cancelled = false;
     const step = () => {
       if (cancelled) return;
-      if (i >= activeQuestion.length) {
-        setQaTypingDone(true);
-        setQaTyped("");
-        setTimeout(() => setQaInputVisible(true), 200);
+      if (i >= activeBranchQuestion.length) {
+        setBranchTypingDone(true);
+        setBranchTyped("");
+        setTimeout(() => setBranchInputVisible(true), 200);
         return;
       }
       i += 1;
-      setQaTyped(activeQuestion.slice(0, i));
+      setBranchTyped(activeBranchQuestion.slice(0, i));
       setTimeout(step, 26);
     };
     const t = setTimeout(step, 120);
@@ -172,73 +175,71 @@ export default function TypeformFlow({ setStep }) {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [phase, qaIndex, activeQuestion]);
+  }, [phase, flowStep, activeBranchQuestion, branchOffset]);
 
   useEffect(() => {
-    if (qaInputVisible && qaInputRef.current) qaInputRef.current.focus();
-  }, [qaInputVisible, qaIndex]);
+    if (branchInputVisible && branchInputRef.current) {
+      branchInputRef.current.focus();
+    }
+  }, [branchInputVisible, flowStep]);
 
   useEffect(() => {
     import("@/components/Logo3D");
   }, []);
 
   useEffect(() => {
-    setBranchAnswers(qaHistory.map((t) => t.answer));
-  }, [qaHistory]);
+    if (phase === "draw") import("@/components/Logo3D");
+  }, [phase]);
 
   useEffect(() => {
-    if (phase !== "qa") return;
+    if (!["flow", "draw"].includes(phase)) return;
     const t = setTimeout(() => {
-      qaActiveRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-    }, 80);
+      activeRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }, 100);
     return () => clearTimeout(t);
-  }, [phase, qaIndex, qaInputVisible, qaTypingDone, qaHistory.length]);
-
-  const proceedCategory = (key) => {
-    setCategory(key);
-    setQaIndex(0);
-    setBranchAnswers([]);
-    setQaHistory([]);
-    setPhase("qa");
-  };
+  }, [phase, flowStep, branchInputVisible, branchTypingDone, history.length]);
 
   const updateHistoryAnswer = (index, value) => {
-    setQaHistory((history) => {
-      const next = [...history];
+    setHistory((prev) => {
+      const next = [...prev];
       next[index] = { ...next[index], answer: value };
       return next;
     });
-    setBranchAnswers((answers) => {
-      const next = [...answers];
-      next[index] = value;
-      return next;
-    });
+    if (index === 0) setIdea(value);
+    if (index === 1) {
+      const cat = CATEGORIES.find((c) => c.label === value)?.key;
+      if (cat) setCategory(cat);
+    }
   };
 
-  const advanceAfterAnswer = (answerText) => {
-    setQaHistory((history) => [
-      ...history,
-      { question: activeQuestion, answer: answerText },
+  const proceedIdea = () => {
+    setHistory([{ question: IDEA_QUESTION, answer: idea.trim() }]);
+    setFlowStep(1);
+  };
+
+  const proceedCategory = (key) => {
+    setCategory(key);
+    setHistory((prev) => [
+      ...prev.slice(0, 1),
+      { question: CATEGORY_QUESTION, answer: categoryLabel(key) },
     ]);
-    setQaInput("");
-    setQaIndex((i) => {
-      if (i + 1 >= currentBranchQuestions.length) {
-        setPhase("draw");
-        return i;
-      }
-      return i + 1;
-    });
+    setFlowStep(branchOffset);
   };
 
-  const skipQa = () => advanceAfterAnswer("");
-
-  const proceedQa = () => advanceAfterAnswer(qaInput.trim());
-
-  const getCanvasContext = () => {
-    const c = canvasRef.current;
-    if (!c) return null;
-    return c.getContext("2d");
+  const proceedBranch = (answerText) => {
+    setHistory((prev) => [
+      ...prev,
+      { question: activeBranchQuestion, answer: answerText },
+    ]);
+    setBranchInput("");
+    if (branchIndex + 1 >= branchQuestions.length) {
+      setPhase("draw");
+      return;
+    }
+    setFlowStep((s) => s + 1);
   };
+
+  const getCanvasContext = () => canvasRef.current?.getContext("2d") || null;
 
   const drawSegment = (x0, y0, x1, y1) => {
     const ctx = getCanvasContext();
@@ -256,9 +257,10 @@ export default function TypeformFlow({ setStep }) {
     const c = canvasRef.current;
     if (!c) return { x: 0, y: 0 };
     const r = c.getBoundingClientRect();
-    const x = (e.clientX - r.left) * (c.width / r.width);
-    const y = (e.clientY - r.top) * (c.height / r.height);
-    return { x, y };
+    return {
+      x: (e.clientX - r.left) * (c.width / r.width),
+      y: (e.clientY - r.top) * (c.height / r.height),
+    };
   };
 
   useEffect(() => {
@@ -290,16 +292,18 @@ export default function TypeformFlow({ setStep }) {
       }
     }
 
-    const answers =
-      qaHistory.length > 0
-        ? qaHistory.map((t) => t.answer)
-        : branchAnswers;
+    const branchAnswers = history
+      .slice(branchOffset)
+      .map((item) => item.answer);
 
     const payload = {
-      idea: idea.trim(),
-      category: category === "other" ? "Something else" : category || "",
-      branchQuestions: currentBranchQuestions,
-      branchAnswers: answers,
+      idea: (history[0]?.answer || idea).trim(),
+      category:
+        category === "other"
+          ? "Something else"
+          : categoryLabel(category) || history[1]?.answer || "",
+      branchQuestions,
+      branchAnswers,
       drawingDataUrl: drawingPayload,
     };
 
@@ -314,10 +318,7 @@ export default function TypeformFlow({ setStep }) {
       .then((res) => res.json())
       .then((data) => {
         if (!data.emailed && !data.sheet) {
-          console.warn(
-            "Email not sent — add SMTP_USER + SMTP_PASS (Gmail app password) in Vercel. See EMAIL_SETUP.md",
-            data
-          );
+          console.warn("Email not sent — see EMAIL_SETUP.md", data);
         }
       })
       .catch((err) => console.error("manifestation submit failed:", err));
@@ -329,288 +330,278 @@ export default function TypeformFlow({ setStep }) {
     }, 4200);
   };
 
+  const renderHistory = () =>
+    history.map((item, i) => (
+      <li key={`hist-${i}`} className="pb-6 mb-6 border-b border-gray-300 list-none">
+        <p className="mb-1 text-xs text-gray-500">Question {i + 1}</p>
+        <p className="mb-2 font-medium text-gray-900">{item.question}</p>
+        <label className="block text-xs text-gray-500 mb-1">Your answer</label>
+        <textarea
+          value={item.answer}
+          onChange={(e) => updateHistoryAnswer(i, e.target.value)}
+          rows={i === 0 ? 4 : 3}
+          className="w-full resize-none bg-white border border-gray-200 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 text-gray-800 relative z-20"
+        />
+      </li>
+    ));
+
   return (
     <>
-      {!sendSplash && (
+      {showCornerLogo && (
         <Logo3D variant="corner" className="manifestation-logo-corner" />
       )}
 
       {sendSplash && (
-        <div className="fixed inset-0 z-[60] manifestation-send-overlay pointer-events-none">
-          <Logo3D sending className="manifestation-logo-send" />
-        </div>
-      )}
-
-      <div className="relative z-10 max-w-[420px] w-11/12 text-black pt-36 sm:pt-28 pb-24 font-mono mx-auto bg-gray-100/95 backdrop-blur-sm">
-
-      {phase === "intro" && (
-        <div>
-          <p className="min-h-[3.5rem]">
-            {titleTyped}
-            {titleTyped.length < titleText.length && (
-              <span className="text-cyan-600 ml-0.5">_</span>
-            )}
-          </p>
-          {introTitleDone && (
-            <div className="mt-4 text-sm text-gray-500 min-h-[5rem]">
-              <span>{ideaCarouselText}</span>
-              <span className="text-cyan-600 ml-1">_</span>
-            </div>
-          )}
-          {introTitleDone && (
-            <button
-              type="button"
-              onClick={() => setPhase("create")}
-              className="mt-8 px-4 py-3 border-2 border-gray-800 w-full hover:bg-gray-100"
-            >
-              Continue
-            </button>
-          )}
-        </div>
-      )}
-
-      {phase === "create" && (
-        <div>
-          <p className="mb-4 text-gray-600">{titleText}</p>
-          <label className="block text-sm text-gray-500 mb-2">
-            Type what you want to create
-          </label>
-          <textarea
-            value={idea}
-            onChange={(e) => setIdea(e.target.value)}
-            placeholder="i want to create "
-            rows={5}
-            className="w-full resize-none bg-gray-100 border-0 p-3 focus:outline-none focus:ring-2 focus:ring-cyan-600 placeholder:text-gray-400 placeholder:italic text-gray-900"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              setIdea("I'll share more later");
-              setPhase("category");
-            }}
-            className="mt-3 text-sm text-gray-500 underline hover:text-gray-800"
-          >
-            Skip — I&apos;ll describe later
-          </button>
-          <button
-            type="button"
-            disabled={idea.trim().length < 2}
-            onClick={() => setPhase("category")}
-            className="mt-6 px-4 py-3 border-2 border-gray-800 w-full disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-100"
-          >
-            Next
-          </button>
-        </div>
-      )}
-
-      {phase === "category" && (
-        <div>
-          <p className="min-h-[6rem]">
-            {categoryTyped}
-            {categoryTyped.length < categoryQuestion.length && (
-              <span className="text-cyan-600 ml-0.5">_</span>
-            )}
-          </p>
-          {categoryTyped.length >= categoryQuestion.length && (
-            <div className="mt-6 flex flex-col gap-2">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c.key}
-                  type="button"
-                  onClick={() => proceedCategory(c.key)}
-                  className="text-left px-4 py-3 border-2 border-gray-300 hover:border-gray-800 hover:bg-gray-50"
-                >
-                  {c.label}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => proceedCategory("other")}
-                className="text-center px-4 py-2 text-sm text-gray-500 underline hover:text-gray-800"
-              >
-                Skip — not sure how to categorize
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {phase === "qa" && (
-        <div className="pb-12">
-          {qaIndex > 0 && (
-            <p className="text-xs uppercase tracking-wide text-gray-500 mb-4">
-              Your answers so far — scroll up to edit
-            </p>
-          )}
-          <ol className="space-y-8 list-none m-0 p-0">
-            {currentBranchQuestions.map((question, i) => {
-              if (i > qaIndex) return null;
-              const isPast = i < qaIndex;
-              const turn = qaHistory[i];
-
-              if (isPast) {
-                return (
-                  <li
-                    key={`qa-past-${i}`}
-                    className="pb-6 border-b border-gray-300"
-                  >
-                    <p className="mb-1 text-xs text-gray-500">Question {i + 1}</p>
-                    <p className="mb-2 font-medium text-gray-900">
-                      {turn?.question || question}
-                    </p>
-                    <label className="block text-xs text-gray-500 mb-1">
-                      Your answer
-                    </label>
-                    <textarea
-                      value={turn?.answer ?? ""}
-                      onChange={(e) => updateHistoryAnswer(i, e.target.value)}
-                      rows={3}
-                      className="w-full resize-none bg-white border border-gray-200 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 text-gray-800"
-                    />
-                  </li>
-                );
-              }
-
-              return (
-                <li
-                  key={`qa-active-${i}`}
-                  ref={qaActiveRef}
-                  className="scroll-mt-8 pb-4 list-none"
-                >
-                  <p className="mb-1 text-xs text-cyan-700">Question {i + 1}</p>
-                  {!qaTypingDone ? (
-                    <p className="mb-2 font-medium text-gray-900">
-                      {qaTyped}
-                      <span className="text-cyan-600 ml-0.5">_</span>
-                    </p>
-                  ) : (
-                    <p className="mb-2 font-medium text-gray-900">{question}</p>
-                  )}
-                  {qaInputVisible && (
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start w-full mt-2">
-                      <textarea
-                        ref={qaInputRef}
-                        value={qaInput}
-                        onChange={(e) => setQaInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            if (qaInput.trim()) proceedQa();
-                          }
-                        }}
-                        rows={3}
-                        className="flex-1 w-full resize-none bg-white border border-gray-200 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 caret-cyan-600"
-                      />
-                      <div className="flex flex-col gap-2 shrink-0">
-                        <button
-                          type="button"
-                          disabled={!qaInput.trim()}
-                          onClick={proceedQa}
-                          className="px-3 py-2 border-2 border-gray-800 disabled:opacity-40"
-                        >
-                          Next
-                        </button>
-                        <button
-                          type="button"
-                          onClick={skipQa}
-                          className="px-3 py-2 border border-gray-400 text-gray-600 text-sm hover:bg-gray-50"
-                        >
-                          Skip question
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-      )}
-
-      {phase === "draw" && (
-        <div className="relative z-20">
-          <p className="mb-2">
-            Want to sketch your idea? Use the pad below—or skip.
-          </p>
-          <canvas
-            ref={canvasRef}
-            width={360}
-            height={220}
-            className="w-full max-w-md border-2 border-gray-300 touch-none cursor-crosshair bg-white"
-            onMouseDown={(e) => {
-              drawingRef.current = true;
-              const { x, y } = canvasCoords(e);
-              lastPointRef.current = { x, y };
-            }}
-            onMouseMove={(e) => {
-              if (!drawingRef.current || !lastPointRef.current) return;
-              const { x, y } = canvasCoords(e);
-              const { x: x0, y: y0 } = lastPointRef.current;
-              drawSegment(x0, y0, x, y);
-              lastPointRef.current = { x, y };
-            }}
-            onMouseUp={() => {
-              drawingRef.current = false;
-              lastPointRef.current = null;
-            }}
-            onMouseLeave={() => {
-              drawingRef.current = false;
-              lastPointRef.current = null;
-            }}
-            onTouchStart={(e) => {
-              e.preventDefault();
-              const t = e.touches[0];
-              drawingRef.current = true;
-              const { x, y } = canvasCoords({
-                clientX: t.clientX,
-                clientY: t.clientY,
-              });
-              lastPointRef.current = { x, y };
-            }}
-            onTouchMove={(e) => {
-              e.preventDefault();
-              if (!drawingRef.current || !lastPointRef.current) return;
-              const t = e.touches[0];
-              const { x, y } = canvasCoords({
-                clientX: t.clientX,
-                clientY: t.clientY,
-              });
-              const { x: x0, y: y0 } = lastPointRef.current;
-              drawSegment(x0, y0, x, y);
-              lastPointRef.current = { x, y };
-            }}
-            onTouchEnd={() => {
-              drawingRef.current = false;
-              lastPointRef.current = null;
-            }}
-          />
-          <div className="flex flex-wrap gap-2 mt-4">
-            <button
-              type="button"
-              onClick={clearCanvas}
-              className="px-4 py-2 border-2 border-gray-400"
-            >
-              Clear
-            </button>
-            <button
-              type="button"
-              onClick={() => submitAll("skip")}
-              disabled={submitting}
-              className="px-4 py-2 border-2 border-gray-800"
-            >
-              Skip drawing &amp; send
-            </button>
-            <button
-              type="button"
-              onClick={() => submitAll("canvas")}
-              disabled={submitting}
-              className="px-4 py-2 border-2 border-black bg-gray-900 text-white"
-            >
-              Send manifestation
-            </button>
+        <div
+          className="fixed inset-0 z-[100] manifestation-send-overlay pointer-events-none"
+          aria-live="polite"
+          aria-label="Sending your manifestation"
+        >
+          <div className="manifestation-logo-stage">
+            <Logo3D sending className="manifestation-logo-send" />
+            <p className="manifestation-send-caption">Sending your manifestation…</p>
           </div>
         </div>
       )}
+
+      <div className="relative z-20 max-w-[420px] w-11/12 text-black pt-8 pb-24 font-mono mx-auto">
+        {phase === "intro" && (
+          <div className="relative z-20">
+            <p className="min-h-[3.5rem]">
+              {titleTyped}
+              {titleTyped.length < IDEA_QUESTION.length && (
+                <span className="text-cyan-600 ml-0.5">_</span>
+              )}
+            </p>
+            {introTitleDone && (
+              <div className="mt-4 text-sm text-gray-500 min-h-[5rem]">
+                <span>{ideaCarouselText}</span>
+                <span className="text-cyan-600 ml-1">_</span>
+              </div>
+            )}
+            {introTitleDone && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFlowStep(0);
+                  setHistory([]);
+                  setPhase("flow");
+                }}
+                className="mt-8 px-4 py-3 border-2 border-gray-800 w-full hover:bg-gray-100 relative z-20"
+              >
+                Continue
+              </button>
+            )}
+          </div>
+        )}
+
+        {(phase === "flow" || phase === "draw") && (
+          <div className="relative z-20">
+            {history.length > 0 && (
+              <p className="text-xs uppercase tracking-wide text-gray-500 mb-4">
+                Your answers — scroll up anytime to edit
+              </p>
+            )}
+            <ol className="space-y-0 list-none m-0 p-0">{renderHistory()}</ol>
+
+            {phase === "flow" && flowStep === 0 && (
+              <li ref={activeRef} className="scroll-mt-8 pb-6 list-none">
+                <p className="mb-1 text-xs text-cyan-700">Question 1</p>
+                <p className="mb-2 font-medium text-gray-900">{IDEA_QUESTION}</p>
+                <label className="block text-sm text-gray-500 mb-2">
+                  Type what you want to create
+                </label>
+                <textarea
+                  value={idea}
+                  onChange={(e) => setIdea(e.target.value)}
+                  placeholder="i want to create "
+                  rows={5}
+                  className="w-full resize-none bg-white border border-gray-200 p-3 focus:outline-none focus:ring-2 focus:ring-cyan-600 text-gray-900 relative z-20"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIdea("I'll share more later");
+                    proceedIdea();
+                  }}
+                  className="mt-3 text-sm text-gray-500 underline hover:text-gray-800 relative z-20"
+                >
+                  Skip — I&apos;ll describe later
+                </button>
+                <button
+                  type="button"
+                  onClick={proceedIdea}
+                  className="mt-4 px-4 py-3 border-2 border-gray-800 w-full hover:bg-gray-100 relative z-20"
+                >
+                  Next
+                </button>
+              </li>
+            )}
+
+            {phase === "flow" && flowStep === 1 && (
+              <li ref={activeRef} className="scroll-mt-8 pb-6 list-none">
+                <p className="mb-1 text-xs text-cyan-700">Question 2</p>
+                <p className="mb-4 font-medium text-gray-900">{CATEGORY_QUESTION}</p>
+                <div className="flex flex-col gap-2 relative z-20">
+                  {CATEGORIES.map((c) => (
+                    <button
+                      key={c.key}
+                      type="button"
+                      onClick={() => proceedCategory(c.key)}
+                      className="text-left px-4 py-3 border-2 border-gray-300 hover:border-gray-800 hover:bg-gray-50 bg-white"
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => proceedCategory("other")}
+                    className="text-center px-4 py-2 text-sm text-gray-500 underline hover:text-gray-800"
+                  >
+                    Skip — not sure how to categorize
+                  </button>
+                </div>
+              </li>
+            )}
+
+            {phase === "flow" && flowStep >= branchOffset && (
+              <li ref={activeRef} className="scroll-mt-8 pb-6 list-none">
+                <p className="mb-1 text-xs text-cyan-700">
+                  Question {flowStep + 1}
+                </p>
+                {!branchTypingDone ? (
+                  <p className="mb-2 font-medium text-gray-900">
+                    {branchTyped}
+                    <span className="text-cyan-600 ml-0.5">_</span>
+                  </p>
+                ) : (
+                  <p className="mb-2 font-medium text-gray-900">
+                    {activeBranchQuestion}
+                  </p>
+                )}
+                {branchInputVisible && (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start mt-2 relative z-20">
+                    <textarea
+                      ref={branchInputRef}
+                      value={branchInput}
+                      onChange={(e) => setBranchInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          if (branchInput.trim()) proceedBranch(branchInput.trim());
+                        }
+                      }}
+                      rows={3}
+                      className="flex-1 w-full resize-none bg-white border border-gray-200 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600"
+                    />
+                    <div className="flex flex-col gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={!branchInput.trim()}
+                        onClick={() => proceedBranch(branchInput.trim())}
+                        className="px-3 py-2 border-2 border-gray-800 disabled:opacity-40 bg-white"
+                      >
+                        Next
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => proceedBranch("")}
+                        className="px-3 py-2 border border-gray-400 text-gray-600 text-sm hover:bg-gray-50 bg-white"
+                      >
+                        Skip question
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </li>
+            )}
+
+            {phase === "draw" && (
+              <li ref={activeRef} className="scroll-mt-8 pb-6 list-none relative z-20">
+                <p className="mb-1 text-xs text-cyan-700">Sketch your idea</p>
+                <p className="mb-2">
+                  Want to sketch your idea? Use the pad below—or skip.
+                </p>
+                <canvas
+                  ref={canvasRef}
+                  width={360}
+                  height={220}
+                  className="w-full max-w-md border-2 border-gray-300 touch-none cursor-crosshair bg-white"
+                  onMouseDown={(e) => {
+                    drawingRef.current = true;
+                    const { x, y } = canvasCoords(e);
+                    lastPointRef.current = { x, y };
+                  }}
+                  onMouseMove={(e) => {
+                    if (!drawingRef.current || !lastPointRef.current) return;
+                    const { x, y } = canvasCoords(e);
+                    const { x: x0, y: y0 } = lastPointRef.current;
+                    drawSegment(x0, y0, x, y);
+                    lastPointRef.current = { x, y };
+                  }}
+                  onMouseUp={() => {
+                    drawingRef.current = false;
+                    lastPointRef.current = null;
+                  }}
+                  onMouseLeave={() => {
+                    drawingRef.current = false;
+                    lastPointRef.current = null;
+                  }}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    const t = e.touches[0];
+                    drawingRef.current = true;
+                    lastPointRef.current = canvasCoords({
+                      clientX: t.clientX,
+                      clientY: t.clientY,
+                    });
+                  }}
+                  onTouchMove={(e) => {
+                    e.preventDefault();
+                    if (!drawingRef.current || !lastPointRef.current) return;
+                    const t = e.touches[0];
+                    const { x, y } = canvasCoords({
+                      clientX: t.clientX,
+                      clientY: t.clientY,
+                    });
+                    const { x: x0, y: y0 } = lastPointRef.current;
+                    drawSegment(x0, y0, x, y);
+                    lastPointRef.current = { x, y };
+                  }}
+                  onTouchEnd={() => {
+                    drawingRef.current = false;
+                    lastPointRef.current = null;
+                  }}
+                />
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={clearCanvas}
+                    className="px-4 py-2 border-2 border-gray-400 bg-white"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => submitAll("skip")}
+                    disabled={submitting}
+                    className="px-4 py-2 border-2 border-gray-800 bg-white"
+                  >
+                    Skip drawing &amp; send
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => submitAll("canvas")}
+                    disabled={submitting}
+                    className="px-4 py-2 border-2 border-black bg-gray-900 text-white"
+                  >
+                    Send manifestation
+                  </button>
+                </div>
+              </li>
+            )}
+          </div>
+        )}
       </div>
     </>
   );
