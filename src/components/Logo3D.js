@@ -26,8 +26,8 @@ class ModelErrorBoundary extends React.Component {
 const MODEL_URL = "/models/3d-logo.glb";
 
 const MODE_CONFIG = {
-  send: { scale: 48, fov: 50 },
-  corner: { scale: 32, cameraZ: 2.15, fov: 48 },
+  send: { scale: 96, fov: 56 },
+  corner: { scale: 64, cameraZ: 1.65, fov: 56 },
 };
 
 useGLTF.preload(MODEL_URL);
@@ -64,8 +64,8 @@ function enhanceMaterials(mats, mode) {
 
 function SendCamera({ sendProgress }) {
   const { camera } = useThree();
-  const startZ = 3.6;
-  const endZ = 1.15;
+  const startZ = 2.8;
+  const endZ = 0.72;
 
   useFrame(() => {
     const eased = 1 - Math.pow(1 - sendProgress, 2);
@@ -107,7 +107,7 @@ function LogoModel({ mode, sendProgress }) {
         sendProgress > 0.88
           ? 1 - ((sendProgress - 0.88) / 0.12) * 0.95
           : 1;
-      const zoomScale = 0.75 + sendProgress * 0.35;
+      const zoomScale = 0.9 + sendProgress * 0.45;
       group.current.position.set(0, 0, 0);
       group.current.rotation.y = 0.45 + t * 0.1;
       group.current.rotation.x = 0.12 + Math.sin(t * 0.28) * 0.03;
@@ -182,7 +182,7 @@ export default function Logo3D({
     return () => cancelAnimationFrame(raf);
   }, [sending, onSendProgress]);
 
-  const cameraZ = mode === "send" ? 3.6 : config.cameraZ;
+  const cameraZ = mode === "send" ? 2.8 : config.cameraZ;
 
   return (
     <div className={`${className} pointer-events-none`} aria-hidden>

@@ -41,8 +41,8 @@
   position: fixed;
   top: 1rem;
   left: 1rem;
-  width: clamp(200px, 38vw, 340px);
-  height: clamp(200px, 38vw, 340px);
+  width: clamp(280px, 52vw, 500px);
+  height: clamp(280px, 52vw, 500px);
   z-index: 35;
   pointer-events: none;
   filter: drop-shadow(0 12px 32px rgba(8, 145, 178, 0.35));
@@ -52,8 +52,8 @@
   .manifestation-logo-corner {
     top: 0.5rem;
     left: 0.5rem;
-    width: min(46vw, 200px);
-    height: min(46vw, 200px);
+    width: min(62vw, 280px);
+    height: min(62vw, 280px);
   }
 }
 
