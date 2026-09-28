@@ -8,7 +8,7 @@ const SCRIPT = [
   { action: "flash", text: "VISUALIZE IT", ms: 1100 },
   {
     action: "type",
-    text: "\n\nhold it in your mind, feel it with all 5 senses..",
+    text: "\n\nhold it in your mind, experience it with all 5 senses..",
     delay: 40,
   },
   { action: "wait", ms: 500 },
