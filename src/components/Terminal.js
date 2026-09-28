@@ -6,23 +6,13 @@ const Logo3D = dynamic(() => import("@/components/Logo3D"), { ssr: false });
 const SCRIPT = [
   { action: "type", text: "Remember that dream you held.", delay: 40 },
   { action: "flash", text: "VISUALIZE IT", ms: 1100 },
-  { action: "type", text: "\n\nThe one that begged to be followed.", delay: 40 },
-  { action: "countdown", steps: [1, 2, 3], interval: 1000 },
-  { action: "type", text: "\n\nBring it back for a moment.", delay: 40 },
-  { action: "wait", ms: 800 },
   {
     action: "type",
-    text: "\n\nImagine seeing it through with all 5 senses:\n\n",
+    text: "\n\nhold it in your mind, feel it with all 5 senses..",
     delay: 40,
   },
-  {
-    action: "type",
-    text: "The feeling of having accomplished that dream,\nthe smell in the room,\nthe taste of gratitude on your tongue,\nthe sound of your vision realized ",
-    delay: 22,
-  },
-  { action: "dots", count: 3, interval: 900 },
   { action: "wait", ms: 500 },
-  { action: "type", text: "\n\nNow take it to the source.", delay: 50 },
+  { action: "type", text: "\n\nNow take it to the source", delay: 50 },
 ];
 
 const TerminalSimulator = ({ step, setStep }) => {
