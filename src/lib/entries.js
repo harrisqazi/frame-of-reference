@@ -1,72 +1,152 @@
-import { google } from "googleapis";
+import fs from "fs";
+import { ImapFlow } from "imapflow";
 import seedProblems from "@/data/problems.json";
 import seedSolutions from "@/data/solutions.json";
 
-const SEEDS = { problems: seedProblems, solutions: seedSolutions };
-const TABS = { problems: "Problems", solutions: "Solutions" };
-const memory = { problems: [], solutions: [] };
+export const ENTRY_HEADER = "X-Frame-Entry";
+export const ENTRY_SEARCH_TOKEN = "FRAMEENTRY";
 
-function sheetsClient() {
-  const { GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY, SPREADSHEET_ID } =
-    process.env;
-  if (!GOOGLE_CLIENT_EMAIL || !GOOGLE_PRIVATE_KEY || !SPREADSHEET_ID) {
+const SEEDS = { problems: seedProblems, solutions: seedSolutions };
+const CACHE_FILE = "/tmp/frame-of-reference-entries.json";
+const CACHE_TTL_MS = 60 * 1000;
+const MAX_MESSAGES = 400;
+const MAILBOXES = ["[Gmail]/All Mail", "INBOX"];
+
+let memoryCache = null;
+
+function imapConfig() {
+  const user = process.env.SMTP_USER || process.env.GMAIL_USER;
+  const pass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
+  if (!user || !pass) return null;
+  return {
+    host: process.env.IMAP_HOST || "imap.gmail.com",
+    port: Number(process.env.IMAP_PORT || 993),
+    secure: true,
+    auth: { user, pass },
+    logger: false,
+  };
+}
+
+export function entryHeader(type, entry) {
+  return Buffer.from(JSON.stringify({ type, ...entry }), "utf8").toString(
+    "base64url"
+  );
+}
+
+function parseEntries(source) {
+  const headerEnd = source.search(/\r?\n\r?\n/);
+  const headers = headerEnd === -1 ? source : source.slice(0, headerEnd);
+  const m = headers.match(
+    new RegExp(`^${ENTRY_HEADER}:\\s*([^\\r\\n]*(?:\\r?\\n[ \\t][^\\r\\n]*)*)`, "im")
+  );
+  if (!m) return [];
+  try {
+    const e = JSON.parse(
+      Buffer.from(m[1].replace(/\s+/g, ""), "base64url").toString("utf8")
+    );
+    return e.text && SEEDS[e.type] ? [e] : [];
+  } catch {
+    return [];
+  }
+}
+
+async function readMailbox() {
+  const config = imapConfig();
+  if (!config) return null;
+  const client = new ImapFlow(config);
+  const result = { problems: [], solutions: [] };
+  const seen = new Set();
+  await client.connect();
+  try {
+    for (const name of MAILBOXES) {
+      let lock;
+      try {
+        lock = await client.getMailboxLock(name);
+      } catch {
+        continue;
+      }
+      try {
+        const uids = await client.search(
+          { body: ENTRY_SEARCH_TOKEN },
+          { uid: true }
+        );
+        const recent = (uids || []).slice(-MAX_MESSAGES);
+        if (!recent.length) continue;
+        for await (const msg of client.fetch(
+          recent,
+          { headers: [ENTRY_HEADER], envelope: true },
+          { uid: true }
+        )) {
+          const id = msg.envelope?.messageId || msg.uid;
+          if (seen.has(id)) continue;
+          seen.add(id);
+          parseEntries(msg.headers?.toString("utf8") || "").forEach((e) =>
+            result[e.type].push({
+              text: e.text,
+              locations: e.locations || [],
+              createdAt: e.createdAt,
+            })
+          );
+        }
+      } finally {
+        lock.release();
+      }
+      if (result.problems.length || result.solutions.length) break;
+    }
+  } finally {
+    await client.logout().catch(() => {});
+  }
+  return result;
+}
+
+function readCacheFile() {
+  try {
+    return JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
+  } catch {
     return null;
   }
-  const jwt = new google.auth.JWT(
-    GOOGLE_CLIENT_EMAIL,
-    null,
-    GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-    ["https://www.googleapis.com/auth/spreadsheets"]
-  );
-  return google.sheets({ version: "v4", auth: jwt });
+}
+
+function writeCacheFile(data) {
+  try {
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(data));
+  } catch {
+    // /tmp is best-effort; the mailbox remains the source of truth.
+  }
+}
+
+async function loadStored() {
+  const cached = memoryCache || readCacheFile();
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) return cached;
+  try {
+    const fromMail = await readMailbox();
+    if (fromMail) {
+      memoryCache = { ...fromMail, fetchedAt: Date.now() };
+      writeCacheFile(memoryCache);
+      return memoryCache;
+    }
+  } catch (e) {
+    console.warn("Could not read entries from mailbox:", e.message);
+  }
+  return cached || { problems: [], solutions: [], fetchedAt: 0 };
 }
 
 export async function getEntries(type) {
-  const seed = SEEDS[type] || [];
-  const sheets = sheetsClient();
-  let stored = [];
-  if (sheets) {
-    try {
-      const res = await sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.SPREADSHEET_ID,
-        range: `${TABS[type]}!A:C`,
-      });
-      stored = (res.data.values || [])
-        .filter((row) => row[1])
-        .map((row) => ({
-          createdAt: row[0],
-          text: row[1],
-          locations: (row[2] || "").split(" | ").filter(Boolean),
-        }));
-    } catch (e) {
-      console.warn(`Could not read ${TABS[type]} tab:`, e.message);
-    }
-  }
-  return [...seed, ...stored, ...memory[type]];
+  const stored = await loadStored();
+  const seedTexts = new Set(SEEDS[type].map((e) => e.text));
+  return [
+    ...SEEDS[type],
+    ...(stored[type] || []).filter((e) => !seedTexts.has(e.text)),
+  ];
 }
 
-export async function addEntry(type, { text, locations = [] }) {
-  if (!SEEDS[type] || !text?.trim()) return { ok: false };
-  const entry = {
-    createdAt: new Date().toISOString(),
-    text: text.trim().slice(0, 280),
-    locations,
+export function rememberEntry(type, entry) {
+  const base = memoryCache || readCacheFile() || {
+    problems: [],
+    solutions: [],
+    fetchedAt: 0,
   };
-  memory[type].push(entry);
-  const sheets = sheetsClient();
-  if (!sheets) return { ok: true, persisted: false };
-  try {
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: process.env.SPREADSHEET_ID,
-      range: TABS[type],
-      valueInputOption: "RAW",
-      insertDataOption: "INSERT_ROWS",
-      resource: {
-        values: [[entry.createdAt, entry.text, locations.join(" | ")]],
-      },
-    });
-    return { ok: true, persisted: true };
-  } catch (e) {
-    return { ok: true, persisted: false, reason: e.message };
-  }
+  base[type] = [...(base[type] || []), entry];
+  memoryCache = base;
+  writeCacheFile(base);
 }

@@ -9,7 +9,25 @@
  */
 import { google } from "googleapis";
 import nodemailer from "nodemailer";
-import { addEntry } from "@/lib/entries";
+import {
+  ENTRY_HEADER,
+  ENTRY_SEARCH_TOKEN,
+  entryHeader,
+  rememberEntry,
+} from "@/lib/entries";
+
+function listEntryFor(body) {
+  const text = body.listEntry?.text?.trim();
+  if (!text) return null;
+  return {
+    type: body.kind === "solution" ? "solutions" : "problems",
+    entry: {
+      text: text.slice(0, 280),
+      locations: body.listEntry.locations || [],
+      createdAt: new Date().toISOString(),
+    },
+  };
+}
 
 const DEFAULT_NOTIFY_EMAIL = "admin@pooly.org";
 
@@ -67,6 +85,15 @@ function buildEmailText(body) {
   );
   if (body.files?.length) {
     lines.push(`Uploaded files: ${body.files.map((f) => f.name).join(", ")}`);
+  }
+
+  if (body.listEntry?.text) {
+    lines.push(
+      "",
+      `${ENTRY_SEARCH_TOKEN} — added to the ${
+        body.kind === "solution" ? "solutions" : "problems"
+      } ticker. Delete this email to remove it.`
+    );
   }
 
   return lines.join("\n");
@@ -145,6 +172,7 @@ async function sendSmtpEmail(body) {
       subject: subjectFor(body),
       text,
       attachments: getMailAttachments(body),
+      headers: body.entryHeader ? { [ENTRY_HEADER]: body.entryHeader } : {},
     });
 
     return { ok: true, to, method: "gmail" };
@@ -268,14 +296,13 @@ export default async function handler(req, res) {
   const body =
     typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-  if (body.listEntry?.text) {
-    await addEntry(
-      body.kind === "solution" ? "solutions" : "problems",
-      body.listEntry
-    );
-  }
+  const listed = listEntryFor(body);
+  if (listed) body.entryHeader = entryHeader(listed.type, listed.entry);
 
   const emailResult = await sendSubmissionEmail(body);
+  if (listed && emailResult.method === "gmail") {
+    rememberEntry(listed.type, listed.entry);
+  }
   const sheetResult = await appendSheetRow(body);
 
   const emailed = emailResult.ok === true;

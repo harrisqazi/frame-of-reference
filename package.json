@@ -17,6 +17,7 @@
     "eslint": "8.44.0",
     "eslint-config-next": "13.4.7",
     "googleapis": "^120.0.0",
+    "imapflow": "^1.7.8",
     "next": "13.4.7",
     "nodemailer": "^6.9.13",
     "postcss": "8.4.24",
