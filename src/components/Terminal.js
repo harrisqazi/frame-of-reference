@@ -11,13 +11,15 @@ const SENSE_PHRASES = [
   "the sound",
 ];
 
+// Marks a typed line that should sit on the right side of its row.
+const SENSE_MARK = "\u0001";
+
 const SCRIPT = [
   { action: "type", text: "Remember that dream you held.", delay: 40 },
   { action: "wait", ms: 900 },
   { action: "flash", text: "VISUALIZE IT", ms: 1100 },
   { action: "type", text: "\n\nBring it back for a moment", delay: 40 },
-  { action: "dots", count: 3, interval: 900 },
-  { action: "wait", ms: 800 },
+  { action: "dots", count: 3, interval: 600 },
   {
     action: "type",
     text: "\n\nImagine seeing it through with all 5 senses:\n\n",
@@ -26,9 +28,10 @@ const SCRIPT = [
   {
     action: "cycle",
     phrases: SENSE_PHRASES,
-    typeDelay: 40,
-    holdMs: 800,
-    vanishMs: 900,
+    appearStagger: 28,
+    appearMs: 320,
+    holdMs: 450,
+    deleteDelay: 22,
   },
   { action: "wait", ms: 500 },
   { action: "type", text: "\n\nNow take it to the source.", delay: 50 },
@@ -41,7 +44,8 @@ const TerminalSimulator = ({ step, setStep }) => {
   const [scriptReady, setScriptReady] = useState(false);
   const [flashOverlay, setFlashOverlay] = useState(null);
   const [senseWord, setSenseWord] = useState("");
-  const [senseVanishing, setSenseVanishing] = useState(false);
+  const [senseAppearing, setSenseAppearing] = useState(false);
+  const [senseActive, setSenseActive] = useState(false);
 
   const [scrollPosition, setScrollPosition] = useState(0);
   const [images, setImages] = useState([]);
@@ -126,37 +130,39 @@ const TerminalSimulator = ({ step, setStep }) => {
           await wait(segment.ms);
         } else if (segment.action === "dots") {
           setCountdownLabel("");
+          // Even beat: silence, dot, dot, dot, silence — one beat apart.
           const base = content;
           for (let d = 1; d <= segment.count; d++) {
-            if (cancelled || scriptRunIdRef.current !== runId) return;
-            setContent(base + ".".repeat(d));
             await wait(segment.interval);
+            if (!live()) return;
+            setContent(base + ".".repeat(d));
           }
-          content = base + ".".repeat(segment.count);
+          await wait(segment.interval * 2);
         } else if (segment.action === "cycle") {
           setCountdownLabel("");
+          setSenseActive(true);
           for (let p = 0; p < segment.phrases.length; p++) {
             if (!live()) return;
             const phrase = segment.phrases[p];
-            setSenseVanishing(false);
-            for (let c = 1; c <= phrase.length; c++) {
+            setSenseAppearing(true);
+            setSenseWord(phrase);
+            await wait(phrase.length * segment.appearStagger + segment.appearMs);
+            if (!live()) return;
+            setSenseAppearing(false);
+            if (p === segment.phrases.length - 1) break;
+            await wait(segment.holdMs);
+            for (let c = phrase.length - 1; c >= 0; c--) {
               if (!live()) return;
               setSenseWord(phrase.slice(0, c));
-              await wait(segment.typeDelay);
-            }
-            if (p < segment.phrases.length - 1) {
-              await wait(segment.holdMs);
-              if (!live()) return;
-              setSenseVanishing(true);
-              await wait(segment.vanishMs);
-              if (!live()) return;
-              setSenseWord("");
-              setSenseVanishing(false);
+              await wait(segment.deleteDelay);
             }
           }
           if (!live()) return;
           setSenseWord("");
-          setContent(content + segment.phrases[segment.phrases.length - 1]);
+          setSenseActive(false);
+          setContent(
+            content + SENSE_MARK + segment.phrases[segment.phrases.length - 1]
+          );
         } else if (segment.action === "flash") {
           setCountdownLabel("");
           if (!cancelled && scriptRunIdRef.current === runId) {
@@ -279,25 +285,31 @@ const TerminalSimulator = ({ step, setStep }) => {
     const lines = typedText.split("\n");
     return lines.map((item, key) => {
       const isLast = key === lines.length - 1;
+      const cycling = isLast && senseActive;
+      const rightAligned = cycling || item.startsWith(SENSE_MARK);
+      const Tag = rightAligned ? "span" : React.Fragment;
+      const alignProps = rightAligned
+        ? { className: "block text-right" }
+        : {};
       return (
         <span key={key}>
-          {item}
-          {isLast &&
-            senseWord.split("").map((ch, i) => (
-              <span
-                key={`${senseWord.length}-${i}`}
-                className={senseVanishing ? "vanish-char" : undefined}
-                style={
-                  senseVanishing
-                    ? { animationDelay: `${(senseWord.length - 1 - i) * 45}ms` }
-                    : undefined
-                }
-              >
-                {ch === " " ? "\u00a0" : ch}
-              </span>
-            ))}
-          {isLast && !countdownLabel && <span className="matrix-cursor" />}
-          <br />
+          <Tag {...alignProps}>
+            {item.replace(SENSE_MARK, "")}
+            {cycling &&
+              senseWord.split("").map((ch, i) => (
+                <span
+                  key={i}
+                  className={senseAppearing ? "appear-char" : undefined}
+                  style={
+                    senseAppearing ? { animationDelay: `${i * 28}ms` } : undefined
+                  }
+                >
+                  {ch === " " ? "\u00a0" : ch}
+                </span>
+              ))}
+            {isLast && !countdownLabel && <span className="matrix-cursor" />}
+          </Tag>
+          {!rightAligned && <br />}
         </span>
       );
     });
@@ -326,7 +338,7 @@ const TerminalSimulator = ({ step, setStep }) => {
             style={{ opacity }}
             className="fixed h-screen w-full p-12 flex justify-center"
           >
-            <div className="text-white text-left w-[400px] pt-8 max-w-11/12 font-mono">
+            <div className="relative z-10 text-white text-left w-[400px] pt-8 max-w-11/12 font-mono">
               <p>
                 {renderText()}
                 {countdownLabel && (
@@ -335,10 +347,10 @@ const TerminalSimulator = ({ step, setStep }) => {
                   </span>
                 )}
               </p>
-              <Logo3D variant="hero" className="intro-logo" />
             </div>
+            <Logo3D variant="hero" className="intro-logo" />
 
-            <div className="absolute phone:bottom-24 bottom-12 w-full flex justify-center pointer-events-auto">
+            <div className="absolute z-10 phone:bottom-24 bottom-12 w-full flex justify-center pointer-events-auto">
               <button
                 type="button"
                 onClick={advanceToNextStep}

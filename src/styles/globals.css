@@ -197,7 +197,7 @@ body {
 }
 
 :root {
-  --matrix: #00ff41;
+  --matrix: #008f11;
 }
 
 @keyframes matrix-blink {
@@ -212,8 +212,22 @@ body {
   margin-left: 3px;
   vertical-align: text-bottom;
   background: var(--matrix);
-  box-shadow: 0 0 6px var(--matrix);
-  animation: matrix-blink 1s step-end infinite;
+  box-shadow: 0 0 4px rgba(0, 143, 17, 0.6);
+  animation: matrix-blink 1.2s step-end infinite;
+}
+
+@keyframes appear-char {
+  0% {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translate(0.35em, -0.9em) scale(1.6) rotate(12deg);
+  }
+  100% { opacity: 1; filter: blur(0); transform: none; }
+}
+
+.appear-char {
+  display: inline-block;
+  animation: appear-char 0.32s ease-out both;
 }
 
 @keyframes vanish-char {
@@ -231,15 +245,17 @@ body {
 }
 
 .intro-logo {
-  display: block;
-  width: min(80vw, 300px);
-  height: min(34vh, 300px);
-  margin: 1.5rem auto 0;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 36vh;
+  bottom: 7.5rem;
+  z-index: 0;
 }
 
 .matrix-box {
-  border: 1px solid rgba(0, 255, 65, 0.55);
-  box-shadow: 0 0 12px rgba(0, 255, 65, 0.15) inset;
+  border: 1px solid rgba(0, 143, 17, 0.55);
+  box-shadow: 0 0 12px rgba(0, 143, 17, 0.15) inset;
   color: var(--matrix);
   background: rgba(0, 20, 6, 0.6);
 }
@@ -252,7 +268,7 @@ body {
 }
 
 .matrix-input::placeholder {
-  color: rgba(0, 255, 65, 0.4);
+  color: rgba(0, 143, 17, 0.4);
 }
 
 .flow-field {
@@ -313,7 +329,7 @@ body {
 }
 
 .perimeter-ticker text {
-  fill: rgba(0, 255, 65, 0.28);
+  fill: rgba(0, 143, 17, 0.28);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   letter-spacing: 0.08em;

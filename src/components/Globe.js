@@ -74,7 +74,7 @@ function Earth({ locations }) {
             map={texture}
             color="#0b2a12"
             emissiveMap={texture}
-            emissive="#00ff41"
+            emissive="#008f11"
             emissiveIntensity={1.6}
             roughness={0.9}
           />
@@ -82,7 +82,7 @@ function Earth({ locations }) {
         <mesh>
           <sphereGeometry args={[1.003, 32, 32]} />
           <meshBasicMaterial
-            color="#00ff41"
+            color="#008f11"
             wireframe
             transparent
             opacity={0.08}
@@ -92,11 +92,11 @@ function Earth({ locations }) {
           <group key={i} position={v}>
             <mesh>
               <sphereGeometry args={[0.028, 16, 16]} />
-              <meshBasicMaterial color="#00ff41" />
+              <meshBasicMaterial color="#008f11" />
             </mesh>
             <mesh>
               <sphereGeometry args={[0.07, 16, 16]} />
-              <meshBasicMaterial color="#00ff41" transparent opacity={0.25} />
+              <meshBasicMaterial color="#008f11" transparent opacity={0.25} />
             </mesh>
           </group>
         ))}
@@ -104,7 +104,7 @@ function Earth({ locations }) {
       <mesh scale={1.12}>
         <sphereGeometry args={[1, 32, 32]} />
         <meshBasicMaterial
-          color="#00ff41"
+          color="#008f11"
           transparent
           opacity={0.06}
           side={THREE.BackSide}

@@ -293,8 +293,8 @@ function LocationStep({ locations, setLocations }) {
       <div className="matrix-box p-4 font-mono">
         <div className="flex items-center gap-2 border-b border-[rgba(0,255,65,0.35)] pb-2">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-            <circle cx="10.5" cy="10.5" r="6.5" stroke="#00ff41" strokeWidth="2" />
-            <path d="M15.5 15.5 21 21" stroke="#00ff41" strokeWidth="2" strokeLinecap="round" />
+            <circle cx="10.5" cy="10.5" r="6.5" stroke="#008f11" strokeWidth="2" />
+            <path d="M15.5 15.5 21 21" stroke="#008f11" strokeWidth="2" strokeLinecap="round" />
           </svg>
           <input
             value={query}

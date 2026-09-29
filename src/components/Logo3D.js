@@ -1,6 +1,6 @@
 import React, { Suspense, useRef, useState, useEffect, useMemo } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useGLTF, Environment, Html } from "@react-three/drei";
+import { useGLTF, Environment } from "@react-three/drei";
 import * as THREE from "three";
 
 class ModelErrorBoundary extends React.Component {
@@ -18,33 +18,17 @@ class ModelErrorBoundary extends React.Component {
   }
 
   render() {
-    if (this.state.hasError) {
-      return (
-        <div
-          className="manifestation-logo-fallback"
-          role="img"
-          aria-label="Manifestation logo"
-        />
-      );
-    }
+    if (this.state.hasError) return null;
     return this.props.children;
   }
-}
-
-function LogoLoading() {
-  return (
-    <Html center style={{ width: 120, height: 120 }}>
-      <div className="manifestation-logo-fallback manifestation-logo-fallback--loading" />
-    </Html>
-  );
 }
 
 const MODEL_URL = "/models/3d-logo.glb";
 
 const MODE_CONFIG = {
-  send: { scale: 7.5, fov: 46 },
-  corner: { scale: 5.5, cameraZ: 3.1, fov: 48 },
-  hero: { scale: 2.6, cameraZ: 3.4, fov: 45 },
+  send: { scale: 2.6, fov: 46 },
+  corner: { scale: 2.2, cameraZ: 3.1, fov: 48 },
+  hero: { scale: 2.75, cameraZ: 3.4, fov: 45 },
 };
 
 const pointer = { x: 0, y: 0 };
@@ -53,6 +37,54 @@ if (typeof window !== "undefined") {
     pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
     pointer.y = (e.clientY / window.innerHeight) * 2 - 1;
   });
+}
+
+function rainbowMarble() {
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: "#ffffff",
+    metalness: 0.15,
+    roughness: 0.04,
+    clearcoat: 1,
+    clearcoatRoughness: 0.02,
+    iridescence: 0.7,
+    iridescenceIOR: 1.6,
+    envMapIntensity: 2.2,
+  });
+  // The GLB has no UVs, so the swirl is computed from object-space position.
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vObjPos;")
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\nvObjPos = position;"
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+varying vec3 vObjPos;
+vec3 hue2rgb(float h) {
+  return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+}`
+      )
+      .replace(
+        "vec4 diffuseColor = vec4( diffuse, opacity );",
+        `vec3 mp = normalize(vObjPos);
+float swirl = mp.x * 2.2 + sin(mp.y * 4.0 + sin(mp.z * 5.0) * 1.6) * 1.4
+  + sin(mp.z * 3.0 + mp.x * 2.0) * 0.7;
+vec3 marble = hue2rgb(fract(swirl * 0.22));
+float vein = smoothstep(0.75, 1.0, abs(sin(swirl * 3.1)));
+vec4 diffuseColor = vec4(mix(marble, vec3(1.0), vein * 0.55) * diffuse, opacity);`
+      );
+  };
+  return mat;
+}
+
+function isInnerBall(mesh) {
+  return (
+    mesh.name === "MESH_2" ||
+    (mesh.geometry?.attributes?.position?.count || Infinity) < 50000
+  );
 }
 
 function iridescentChrome(src) {
@@ -78,29 +110,9 @@ function centerAndScale(object, sizeTarget) {
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z) || 1;
-  const scale = sizeTarget / maxDim;
+  // The parent group applies the returned scale each frame.
   object.position.sub(center);
-  object.scale.setScalar(scale);
-  return scale;
-}
-
-function enhanceMaterials(mats, mode) {
-  mats.forEach((mat) => {
-    if (mat.metalness === undefined) return;
-    mat.transparent = false;
-    mat.opacity = 1;
-    mat.metalness = 0.95;
-    mat.roughness = 0.1;
-    mat.envMapIntensity = mode === "send" ? 2.8 : 2.4;
-    if (mat.color) {
-      mat.color.set("#e8eef2");
-    }
-    if (mat.emissive) {
-      mat.emissive.set("#0c4a6e");
-      mat.emissiveIntensity = mode === "send" ? 0.08 : 0.05;
-    }
-    mat.needsUpdate = true;
-  });
+  return sizeTarget / maxDim;
 }
 
 function SendCamera({ sendProgress }) {
@@ -129,16 +141,11 @@ function LogoModel({ mode, sendProgress }) {
     baseScaleRef.current = centerAndScale(clone, config.scale);
     clone.traverse((child) => {
       if (child.isMesh && child.material) {
-        if (mode === "hero") {
-          child.material = Array.isArray(child.material)
-            ? child.material.map(iridescentChrome)
-            : iridescentChrome(child.material);
-          return;
-        }
-        const mats = Array.isArray(child.material)
-          ? child.material
-          : [child.material];
-        enhanceMaterials(mats, mode);
+        child.material = isInnerBall(child)
+          ? rainbowMarble()
+          : Array.isArray(child.material)
+          ? child.material.map(iridescentChrome)
+          : iridescentChrome(child.material);
       }
     });
     return clone;
@@ -194,10 +201,7 @@ function LogoModel({ mode, sendProgress }) {
 function Scene({ mode, sendProgress }) {
   return (
     <>
-      <Environment
-        preset={mode === "hero" ? "warehouse" : "studio"}
-        environmentIntensity={2.2}
-      />
+      <Environment preset="warehouse" environmentIntensity={2.2} />
       <ambientLight intensity={0.65} />
       <directionalLight position={[6, 10, 8]} intensity={2} color="#ffffff" />
       <directionalLight position={[-6, 3, -5]} intensity={1} color="#a5f3fc" />
@@ -272,7 +276,7 @@ export default function Logo3D({
             far: 200,
           }}
         >
-          <Suspense fallback={<LogoLoading />}>
+          <Suspense fallback={null}>
             <Scene mode={mode} sendProgress={sendProgress} />
           </Suspense>
         </Canvas>

@@ -16,8 +16,7 @@ const ThankYou = ({ step, setStep }) => {
         ${fadeIn ? "opacity-100 " : "opacity-0"}`}
     >
       <div className="text-center text-gray-900 dark:text-gray-900">
-        Your manifestation has entered the ether. Your wish will be fulfilled
-        shortly
+        Your manifestation has entered the ether. We will reach out.
       </div>
     </div>
   );
