@@ -9,23 +9,28 @@
  */
 import { google } from "googleapis";
 import nodemailer from "nodemailer";
-import {
-  ENTRY_HEADER,
-  ENTRY_SEARCH_TOKEN,
-  entryHeader,
-  rememberEntry,
-} from "@/lib/entries";
+import { addEntry } from "@/lib/entries";
 
+// Only problems and solutions the submitter agreed to disclose reach the
+// ticker, and only their main text + locations — never contact info, files,
+// drawings, or anything covered by a signed NDA.
 function listEntryFor(body) {
-  const text = body.listEntry?.text?.trim();
+  const isProblem = body.kind === "problem";
+  const isDisclosedSolution =
+    body.kind === "solution" &&
+    body.disclose === true &&
+    !(body.ndaImages || []).length;
+  if (!isProblem && !isDisclosedSolution) return null;
+
+  const text =
+    typeof body.listEntry?.text === "string" ? body.listEntry.text.trim() : "";
   if (!text) return null;
+  const locations = Array.isArray(body.listEntry.locations)
+    ? body.listEntry.locations.filter((l) => typeof l === "string")
+    : [];
   return {
-    type: body.kind === "solution" ? "solutions" : "problems",
-    entry: {
-      text: text.slice(0, 280),
-      locations: body.listEntry.locations || [],
-      createdAt: new Date().toISOString(),
-    },
+    type: isProblem ? "problems" : "solutions",
+    entry: { text: text.slice(0, 280), locations },
   };
 }
 
@@ -87,14 +92,12 @@ function buildEmailText(body) {
     lines.push(`Uploaded files: ${body.files.map((f) => f.name).join(", ")}`);
   }
 
-  if (body.listEntry?.text) {
-    lines.push(
-      "",
-      `${ENTRY_SEARCH_TOKEN} — added to the ${
-        body.kind === "solution" ? "solutions" : "problems"
-      } ticker. Delete this email to remove it.`
-    );
-  }
+  lines.push(
+    "",
+    listEntryFor(body)
+      ? 'Ticker: added. Edit or remove it in Drafts → "Frame of Reference ticker entries JSON".'
+      : "Ticker: not shown (confidential)."
+  );
 
   return lines.join("\n");
 }
@@ -172,7 +175,6 @@ async function sendSmtpEmail(body) {
       subject: subjectFor(body),
       text,
       attachments: getMailAttachments(body),
-      headers: body.entryHeader ? { [ENTRY_HEADER]: body.entryHeader } : {},
     });
 
     return { ok: true, to, method: "gmail" };
@@ -297,12 +299,10 @@ export default async function handler(req, res) {
     typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
   const listed = listEntryFor(body);
-  if (listed) body.entryHeader = entryHeader(listed.type, listed.entry);
-
-  const emailResult = await sendSubmissionEmail(body);
-  if (listed && emailResult.method === "gmail") {
-    rememberEntry(listed.type, listed.entry);
-  }
+  const [emailResult, tickerResult] = await Promise.all([
+    sendSubmissionEmail(body),
+    listed ? addEntry(listed.type, listed.entry) : { ok: false },
+  ]);
   const sheetResult = await appendSheetRow(body);
 
   const emailed = emailResult.ok === true;
@@ -312,6 +312,7 @@ export default async function handler(req, res) {
     ok: emailed || sheet,
     emailed,
     sheet,
+    ticker: tickerResult.ok === true,
     method: emailResult.method || null,
     sentTo: emailed ? emailResult.to : null,
     sheetTab: sheetResult.tab || null,
