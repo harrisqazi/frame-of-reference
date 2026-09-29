@@ -3,12 +3,19 @@ import dynamic from "next/dynamic";
 
 const Logo3D = dynamic(() => import("@/components/Logo3D"), { ssr: false });
 
+const SENSE_PHRASES = [
+  "the vision",
+  "the taste",
+  "the feeling",
+  "the smell",
+  "the sound",
+];
+
 const SCRIPT = [
   { action: "type", text: "Remember that dream you held.", delay: 40 },
   { action: "flash", text: "VISUALIZE IT", ms: 1100 },
-  { action: "type", text: "\n\nThe one that begged to be followed.", delay: 40 },
-  { action: "countdown", steps: [1, 2, 3], interval: 1000 },
-  { action: "type", text: "\n\nBring it back for a moment.", delay: 40 },
+  { action: "type", text: "\n\nBring it back for a moment", delay: 40 },
+  { action: "dots", count: 3, interval: 900 },
   { action: "wait", ms: 800 },
   {
     action: "type",
@@ -16,11 +23,12 @@ const SCRIPT = [
     delay: 40,
   },
   {
-    action: "type",
-    text: "The feeling of having accomplished that dream,\nthe smell in the room,\nthe taste of gratitude on your tongue,\nthe sound of your vision realized ",
-    delay: 22,
+    action: "cycle",
+    phrases: SENSE_PHRASES,
+    typeDelay: 40,
+    deleteDelay: 40,
+    holdMs: 800,
   },
-  { action: "dots", count: 3, interval: 900 },
   { action: "wait", ms: 500 },
   { action: "type", text: "\n\nNow take it to the source.", delay: 50 },
 ];
@@ -95,6 +103,15 @@ const TerminalSimulator = ({ step, setStep }) => {
         }
       };
 
+      const deleteChars = async (count, delay) => {
+        for (let i = 0; i < count; i++) {
+          if (cancelled || scriptRunIdRef.current !== runId) return;
+          content = content.slice(0, -1);
+          setContent(content);
+          await wait(delay);
+        }
+      };
+
       for (const segment of SCRIPT) {
         if (cancelled || scriptRunIdRef.current !== runId) return;
 
@@ -120,6 +137,17 @@ const TerminalSimulator = ({ step, setStep }) => {
             await wait(segment.interval);
           }
           content = base + ".".repeat(segment.count);
+        } else if (segment.action === "cycle") {
+          setCountdownLabel("");
+          for (let p = 0; p < segment.phrases.length; p++) {
+            if (cancelled || scriptRunIdRef.current !== runId) return;
+            const phrase = segment.phrases[p];
+            await typeChars(phrase, segment.typeDelay);
+            if (p < segment.phrases.length - 1) {
+              await wait(segment.holdMs);
+              await deleteChars(phrase.length, segment.deleteDelay);
+            }
+          }
         } else if (segment.action === "flash") {
           setCountdownLabel("");
           if (!cancelled && scriptRunIdRef.current === runId) {
@@ -277,7 +305,7 @@ const TerminalSimulator = ({ step, setStep }) => {
             style={{ opacity }}
             className="fixed h-screen w-full p-12 flex justify-center"
           >
-            <div className="text-white w-[400px] pt-8 max-w-11/12 font-mono">
+            <div className="text-white text-left w-[400px] pt-8 max-w-11/12 font-mono">
               <p>
                 {renderText()}
                 {countdownLabel && (
