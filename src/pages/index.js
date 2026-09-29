@@ -14,7 +14,7 @@ export default function Home() {
       </Head>
       <main
         className={`flex min-h-screen flex-col items-center justify-between ${
-          [1, 7].includes(step) && "bg-gray-100"
+          step === 7 && "bg-gray-100"
         }  `}
       >
         {step === 0 && <TerminalSimulator step={step} setStep={setStep} />}

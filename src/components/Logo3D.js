@@ -44,7 +44,32 @@ const MODEL_URL = "/models/3d-logo.glb";
 const MODE_CONFIG = {
   send: { scale: 7.5, fov: 46 },
   corner: { scale: 5.5, cameraZ: 3.1, fov: 48 },
+  hero: { scale: 2.6, cameraZ: 3.4, fov: 45 },
 };
+
+const pointer = { x: 0, y: 0 };
+if (typeof window !== "undefined") {
+  window.addEventListener("pointermove", (e) => {
+    pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+    pointer.y = (e.clientY / window.innerHeight) * 2 - 1;
+  });
+}
+
+function iridescentChrome(src) {
+  const mat = new THREE.MeshPhysicalMaterial({
+    color: "#f4f7fa",
+    metalness: 1,
+    roughness: 0.06,
+    clearcoat: 1,
+    clearcoatRoughness: 0.04,
+    iridescence: 1,
+    iridescenceIOR: 1.9,
+    iridescenceThicknessRange: [180, 900],
+    envMapIntensity: 2.6,
+  });
+  if (src?.normalMap) mat.normalMap = src.normalMap;
+  return mat;
+}
 
 useGLTF.preload(MODEL_URL);
 
@@ -104,6 +129,12 @@ function LogoModel({ mode, sendProgress }) {
     baseScaleRef.current = centerAndScale(clone, config.scale);
     clone.traverse((child) => {
       if (child.isMesh && child.material) {
+        if (mode === "hero") {
+          child.material = Array.isArray(child.material)
+            ? child.material.map(iridescentChrome)
+            : iridescentChrome(child.material);
+          return;
+        }
         const mats = Array.isArray(child.material)
           ? child.material
           : [child.material];
@@ -132,6 +163,21 @@ function LogoModel({ mode, sendProgress }) {
       return;
     }
 
+    if (mode === "hero") {
+      const g = group.current;
+      g.userData.spin = (g.userData.spin || 0) + 0.35 * delta;
+      g.rotation.y = THREE.MathUtils.lerp(
+        g.rotation.y,
+        g.userData.spin + pointer.x * 0.6,
+        0.08
+      );
+      g.rotation.x = THREE.MathUtils.lerp(g.rotation.x, pointer.y * 0.35, 0.08);
+      g.position.x = THREE.MathUtils.lerp(g.position.x, pointer.x * 0.15, 0.06);
+      g.position.y = Math.sin(t * 0.55) * 0.04 - pointer.y * 0.1;
+      g.scale.setScalar(base);
+      return;
+    }
+
     group.current.position.y = Math.sin(t * 0.55) * 0.02;
     group.current.rotation.y += 0.18 * delta;
     group.current.rotation.x = 0.12 + Math.sin(t * 0.4) * 0.05;
@@ -148,7 +194,10 @@ function LogoModel({ mode, sendProgress }) {
 function Scene({ mode, sendProgress }) {
   return (
     <>
-      <Environment preset="studio" environmentIntensity={2.2} />
+      <Environment
+        preset={mode === "hero" ? "warehouse" : "studio"}
+        environmentIntensity={2.2}
+      />
       <ambientLight intensity={0.65} />
       <directionalLight position={[6, 10, 8]} intensity={2} color="#ffffff" />
       <directionalLight position={[-6, 3, -5]} intensity={1} color="#a5f3fc" />

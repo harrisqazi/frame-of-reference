@@ -9,6 +9,7 @@
  */
 import { google } from "googleapis";
 import nodemailer from "nodemailer";
+import { addEntry } from "@/lib/entries";
 
 const DEFAULT_NOTIFY_EMAIL = "admin@pooly.org";
 
@@ -18,39 +19,76 @@ function getNotifyEmail() {
   );
 }
 
+export const config = {
+  api: { bodyParser: { sizeLimit: "4.5mb" } },
+};
+
+function kindLabel(body) {
+  return body.kind === "solution" ? "Solution" : "Problem that needs a solution";
+}
+
+function subjectFor(body) {
+  const first = body.answers?.find((a) => a.answer)?.answer || "";
+  return `New ${body.kind || "submission"} — ${first.slice(0, 50) || "Frame of Reference"}`;
+}
+
 function buildEmailText(body) {
   const lines = [
     "New Frame of Reference submission",
     "",
-    "What do you want to create?",
-    body.idea || "(skipped)",
-    "",
-    "Category:",
-    body.category || "(not selected)",
+    `Type: ${kindLabel(body)}`,
     "",
   ];
 
-  const questions = body.branchQuestions || [];
-  const answers = body.branchAnswers || [];
+  (body.answers || []).forEach(({ question, answer }) => {
+    lines.push(`Question: ${question}`);
+    lines.push(`Answer: ${answer || "(skipped)"}`);
+    lines.push("");
+  });
 
-  if (questions.length === 0 && answers.length === 0) {
-    lines.push("(No follow-up questions for this category)", "");
-  } else {
-    const count = Math.max(questions.length, answers.length);
-    for (let i = 0; i < count; i++) {
-      lines.push(`Question: ${questions[i] || `Question ${i + 1}`}`);
-      lines.push(`Answer: ${answers[i] ?? "(skipped)"}`);
-      lines.push("");
-    }
-  }
-
+  const c = body.contact || {};
   lines.push(
-    body.drawingDataUrl
-      ? "Drawing: attached as sketch.png"
-      : "Drawing: (skipped)"
+    "Contact:",
+    `Name: ${[c.firstName, c.lastName].filter(Boolean).join(" ") || "(none)"}`,
+    `Email: ${c.email || "(none)"}`,
+    `Phone: ${c.phone || "(none)"}`,
+    ""
   );
 
+  if (body.kind === "solution") {
+    lines.push(
+      body.ndaImages?.length
+        ? "NDA: signed — attached as nda-agreement.png and nda-signature.png"
+        : "NDA: not required (disclosure allowed)"
+    );
+  }
+  lines.push(
+    body.drawingDataUrl ? "Drawing: attached as sketch.png" : "Drawing: (none)"
+  );
+  if (body.files?.length) {
+    lines.push(`Uploaded files: ${body.files.map((f) => f.name).join(", ")}`);
+  }
+
   return lines.join("\n");
+}
+
+function dataUrlParts(dataUrl) {
+  if (!dataUrl || !dataUrl.includes(",")) return null;
+  const [meta, data] = dataUrl.split(",");
+  const type = meta.match(/data:([^;]+)/)?.[1] || "application/octet-stream";
+  return { type, data };
+}
+
+function collectAttachments(body) {
+  const list = [];
+  const push = (filename, dataUrl) => {
+    const parts = dataUrlParts(dataUrl);
+    if (parts) list.push({ filename, ...parts });
+  };
+  (body.ndaImages || []).forEach((img) => push(img.name, img.dataUrl));
+  push("sketch.png", body.drawingDataUrl);
+  (body.files || []).forEach((f) => push(f.name, f.dataUrl));
+  return list;
 }
 
 function getSmtpConfig() {
@@ -73,14 +111,11 @@ function getSmtpConfig() {
 }
 
 function getMailAttachments(body) {
-  if (!body.drawingDataUrl || !body.drawingDataUrl.includes(",")) return [];
-  return [
-    {
-      filename: "sketch.png",
-      content: Buffer.from(body.drawingDataUrl.split(",")[1], "base64"),
-      contentType: "image/png",
-    },
-  ];
+  return collectAttachments(body).map((a) => ({
+    filename: a.filename,
+    content: Buffer.from(a.data, "base64"),
+    contentType: a.type,
+  }));
 }
 
 async function sendSmtpEmail(body) {
@@ -107,7 +142,7 @@ async function sendSmtpEmail(body) {
     await transporter.sendMail({
       from: `"Frame of Reference" <${smtp.from}>`,
       to,
-      subject: `New submission — ${body.idea?.slice(0, 50) || "Frame of Reference"}`,
+      subject: subjectFor(body),
       text,
       attachments: getMailAttachments(body),
     });
@@ -132,17 +167,16 @@ async function sendResendEmail(body) {
   const payload = {
     from,
     to: [to],
-    subject: `New submission — ${body.idea?.slice(0, 50) || "Frame of Reference"}`,
+    subject: subjectFor(body),
     text,
   };
 
-  if (body.drawingDataUrl && body.drawingDataUrl.includes(",")) {
-    payload.attachments = [
-      {
-        filename: "sketch.png",
-        content: body.drawingDataUrl.split(",")[1],
-      },
-    ];
+  const attachments = collectAttachments(body);
+  if (attachments.length) {
+    payload.attachments = attachments.map((a) => ({
+      filename: a.filename,
+      content: a.data,
+    }));
   }
 
   const res = await fetch("https://api.resend.com/emails", {
@@ -175,11 +209,6 @@ async function sendSubmissionEmail(body) {
   };
 }
 
-function sheetTabForCategory(category) {
-  if (!category || category === "Something else") return "Other";
-  return category;
-}
-
 async function appendSheetRow(body) {
   if (
     !process.env.GOOGLE_CLIENT_EMAIL ||
@@ -197,24 +226,19 @@ async function appendSheetRow(body) {
   );
   const sheets = google.sheets({ version: "v4", auth: jwt });
 
+  const c = body.contact || {};
   const row = [
     new Date().toISOString(),
-    body.idea || "",
-    body.category || "",
-    JSON.stringify(
-      (body.branchQuestions || []).map((q, i) => ({
-        q,
-        a: body.branchAnswers?.[i] ?? "",
-      }))
-    ),
+    kindLabel(body),
+    JSON.stringify(body.answers || []),
+    [c.firstName, c.lastName].filter(Boolean).join(" "),
+    c.email || "",
+    c.phone || "",
     body.drawingDataUrl ? "yes" : "no",
+    body.ndaImages?.length ? "NDA signed" : "",
   ];
 
-  const tabs = [
-    sheetTabForCategory(body.category),
-    "Manifestation",
-    "Product",
-  ];
+  const tabs = ["Manifestation", "Product"];
 
   let lastError = null;
   for (const range of tabs) {
@@ -243,6 +267,13 @@ export default async function handler(req, res) {
 
   const body =
     typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+
+  if (body.listEntry?.text) {
+    await addEntry(
+      body.kind === "solution" ? "solutions" : "problems",
+      body.listEntry
+    );
+  }
 
   const emailResult = await sendSubmissionEmail(body);
   const sheetResult = await appendSheetRow(body);

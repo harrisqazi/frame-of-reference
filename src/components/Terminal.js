@@ -13,6 +13,7 @@ const SENSE_PHRASES = [
 
 const SCRIPT = [
   { action: "type", text: "Remember that dream you held.", delay: 40 },
+  { action: "wait", ms: 900 },
   { action: "flash", text: "VISUALIZE IT", ms: 1100 },
   { action: "type", text: "\n\nBring it back for a moment", delay: 40 },
   { action: "dots", count: 3, interval: 900 },
@@ -26,8 +27,8 @@ const SCRIPT = [
     action: "cycle",
     phrases: SENSE_PHRASES,
     typeDelay: 40,
-    deleteDelay: 40,
     holdMs: 800,
+    vanishMs: 900,
   },
   { action: "wait", ms: 500 },
   { action: "type", text: "\n\nNow take it to the source.", delay: 50 },
@@ -39,6 +40,8 @@ const TerminalSimulator = ({ step, setStep }) => {
   const [buttonVisible, setButtonVisible] = useState(false);
   const [scriptReady, setScriptReady] = useState(false);
   const [flashOverlay, setFlashOverlay] = useState(null);
+  const [senseWord, setSenseWord] = useState("");
+  const [senseVanishing, setSenseVanishing] = useState(false);
 
   const [scrollPosition, setScrollPosition] = useState(0);
   const [images, setImages] = useState([]);
@@ -103,14 +106,7 @@ const TerminalSimulator = ({ step, setStep }) => {
         }
       };
 
-      const deleteChars = async (count, delay) => {
-        for (let i = 0; i < count; i++) {
-          if (cancelled || scriptRunIdRef.current !== runId) return;
-          content = content.slice(0, -1);
-          setContent(content);
-          await wait(delay);
-        }
-      };
+      const live = () => !cancelled && scriptRunIdRef.current === runId;
 
       for (const segment of SCRIPT) {
         if (cancelled || scriptRunIdRef.current !== runId) return;
@@ -140,14 +136,27 @@ const TerminalSimulator = ({ step, setStep }) => {
         } else if (segment.action === "cycle") {
           setCountdownLabel("");
           for (let p = 0; p < segment.phrases.length; p++) {
-            if (cancelled || scriptRunIdRef.current !== runId) return;
+            if (!live()) return;
             const phrase = segment.phrases[p];
-            await typeChars(phrase, segment.typeDelay);
+            setSenseVanishing(false);
+            for (let c = 1; c <= phrase.length; c++) {
+              if (!live()) return;
+              setSenseWord(phrase.slice(0, c));
+              await wait(segment.typeDelay);
+            }
             if (p < segment.phrases.length - 1) {
               await wait(segment.holdMs);
-              await deleteChars(phrase.length, segment.deleteDelay);
+              if (!live()) return;
+              setSenseVanishing(true);
+              await wait(segment.vanishMs);
+              if (!live()) return;
+              setSenseWord("");
+              setSenseVanishing(false);
             }
           }
+          if (!live()) return;
+          setSenseWord("");
+          setContent(content + segment.phrases[segment.phrases.length - 1]);
         } else if (segment.action === "flash") {
           setCountdownLabel("");
           if (!cancelled && scriptRunIdRef.current === runId) {
@@ -268,15 +277,30 @@ const TerminalSimulator = ({ step, setStep }) => {
 
   const renderText = () => {
     const lines = typedText.split("\n");
-    return lines.map((item, key) => (
-      <span key={key}>
-        {item}
-        {key === lines.length - 1 && !countdownLabel && (
-          <span className="text-cyan-500 ml-1">_</span>
-        )}
-        <br />
-      </span>
-    ));
+    return lines.map((item, key) => {
+      const isLast = key === lines.length - 1;
+      return (
+        <span key={key}>
+          {item}
+          {isLast &&
+            senseWord.split("").map((ch, i) => (
+              <span
+                key={`${senseWord.length}-${i}`}
+                className={senseVanishing ? "vanish-char" : undefined}
+                style={
+                  senseVanishing
+                    ? { animationDelay: `${(senseWord.length - 1 - i) * 45}ms` }
+                    : undefined
+                }
+              >
+                {ch === " " ? "\u00a0" : ch}
+              </span>
+            ))}
+          {isLast && !countdownLabel && <span className="matrix-cursor" />}
+          <br />
+        </span>
+      );
+    });
   };
 
   return (
@@ -287,9 +311,6 @@ const TerminalSimulator = ({ step, setStep }) => {
             {flashOverlay}
           </p>
         </div>
-      )}
-      {step === 0 && !flashOverlay && (
-        <Logo3D variant="corner" className="manifestation-logo-corner" />
       )}
       {step === 0 && (
         <>
@@ -314,6 +335,7 @@ const TerminalSimulator = ({ step, setStep }) => {
                   </span>
                 )}
               </p>
+              <Logo3D variant="hero" className="intro-logo" />
             </div>
 
             <div className="absolute phone:bottom-24 bottom-12 w-full flex justify-center pointer-events-auto">

@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useRef, useMemo } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
-import { BRANCH_QUESTIONS } from "@/data/manifestationQuestions";
+import PerimeterTicker from "@/components/PerimeterTicker";
+import { NDA_TITLE, ndaParagraphs } from "@/data/nda";
 
 const Logo3D = dynamic(() => import("@/components/Logo3D"), {
   ssr: false,
@@ -9,50 +10,59 @@ const Logo3D = dynamic(() => import("@/components/Logo3D"), {
     <div className="manifestation-logo-fallback manifestation-logo-fallback--loading" />
   ),
 });
+const Globe = dynamic(() => import("@/components/Globe"), { ssr: false });
 
 const CYCLING_IDEAS = [
   "Recycling infrastructure in Guadalajara",
   "Pacific Islander Venture Fund",
   "A new app or software tool to help people manage their finances",
-  "A design for a new product, such as a piece of furniture or a piece of jewelry",
-  "A new social media platform that connects people with similar interests",
-  "A service that helps people with home organization and decluttering",
-  "An API that allows businesses to integrate with a popular third-party tool",
   "A solution for reducing plastic waste in the environment",
   "A local solution for improving transportation in a specific city or town",
   "A global solution for addressing climate change.",
-  "A mobile app that helps people track their water intake throughout the day",
-  "A recipe for a vegan and gluten-free chocolate cake that doesn't sacrifice taste",
-  "A proposal for a startup that provides affordable, healthy meal delivery to college campuses",
-  "A design for a new ergonomic office chair that improves posture and reduces back pain",
-  "A social media platform that focuses on connecting pet owners with each other and with pet-friendly businesses",
   "A service that helps busy parents organize their family schedules and tasks",
-  "An API that allows businesses to access real-time data on weather patterns and climate conditions in their area",
   "A solution for turning plastic waste into eco-friendly building materials",
-  "A local solution for improving bike infrastructure in a specific neighborhood or district",
-  "A global solution for reducing food waste by optimizing supply chains and reducing spoilage during transportation.",
 ];
 
-const CATEGORIES = [
-  { key: "Product", label: "Product" },
-  { key: "Service", label: "Service" },
-  { key: "API", label: "API" },
-  { key: "Invention", label: "Invention" },
-  { key: "Solution", label: "Solution" },
-  { key: "other", label: "Something else" },
-];
+const INTRO_QUESTION = "What would you like to create?";
+const PATHS = {
+  problem: "I have a problem that needs a solution",
+  solution: "I have a solution",
+};
 
-const IDEA_QUESTION = "What do you want to create?";
-const CATEGORY_QUESTION =
-  "Is this a product, a service, an API, an invention, a solution—or something else?";
+const QUESTIONS = {
+  disclose: "Can we disclose your solution?",
+  nda: "Please sign our Non-Disclosure Agreement",
+  location: {
+    problem: "Where is your problem located?",
+    solution: "Where does your solution locate itself?",
+  },
+  problem: "What is the problem that needs solving?",
+  solution: "What is your solution?",
+  media: "Upload relevant files or draw your solution",
+  contact: "What is your contact information?",
+};
 
-function useTypewriter(text, active, speed = 28) {
+const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+
+function stepsFor(path, disclose) {
+  if (path === "problem") return ["location", "problem", "contact"];
+  return [
+    "disclose",
+    ...(disclose === false ? ["nda"] : []),
+    "location",
+    "solution",
+    "media",
+    "contact",
+  ];
+}
+
+function questionFor(key, path) {
+  return key === "location" ? QUESTIONS.location[path] : QUESTIONS[key];
+}
+
+function useTypewriter(text, speed = 28) {
   const [out, setOut] = useState("");
   useEffect(() => {
-    if (!active || !text) {
-      setOut("");
-      return;
-    }
     let i = 0;
     setOut("");
     const id = setInterval(() => {
@@ -61,263 +71,484 @@ function useTypewriter(text, active, speed = 28) {
       if (i >= text.length) clearInterval(id);
     }, speed);
     return () => clearInterval(id);
-  }, [text, active, speed]);
+  }, [text, speed]);
   return out;
 }
 
-function categoryLabel(key) {
-  return CATEGORIES.find((c) => c.key === key)?.label || key || "";
+function TypedQuestion({ text }) {
+  const typed = useTypewriter(text, 26);
+  return (
+    <p className="mb-4 text-lg text-white">
+      {typed}
+      {typed.length < text.length && <span className="matrix-cursor" />}
+    </p>
+  );
+}
+
+function useDrawPad(ref, { color = "#111", width = 2, background = "#fff", onDraw }) {
+  const drawing = useRef(false);
+  const last = useRef(null);
+
+  const clear = () => {
+    const c = ref.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    ctx.clearRect(0, 0, c.width, c.height);
+    if (background) {
+      ctx.fillStyle = background;
+      ctx.fillRect(0, 0, c.width, c.height);
+    }
+  };
+
+  const point = (e) => {
+    const c = ref.current;
+    const r = c.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return {
+      x: (src.clientX - r.left) * (c.width / r.width),
+      y: (src.clientY - r.top) * (c.height / r.height),
+    };
+  };
+
+  const start = (e) => {
+    if (e.touches) e.preventDefault();
+    drawing.current = true;
+    last.current = point(e);
+  };
+  const move = (e) => {
+    if (!drawing.current || !last.current) return;
+    if (e.touches) e.preventDefault();
+    const p = point(e);
+    const ctx = ref.current.getContext("2d");
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(last.current.x, last.current.y);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    last.current = p;
+  };
+  const end = () => {
+    if (drawing.current) onDraw?.();
+    drawing.current = false;
+    last.current = null;
+  };
+
+  return {
+    clear,
+    handlers: {
+      onMouseDown: start,
+      onMouseMove: move,
+      onMouseUp: end,
+      onMouseLeave: end,
+      onTouchStart: start,
+      onTouchMove: move,
+      onTouchEnd: end,
+    },
+  };
+}
+
+function wrapText(ctx, text, maxWidth) {
+  const words = text.split(" ");
+  const lines = [];
+  let line = "";
+  words.forEach((w) => {
+    const test = line ? `${line} ${w}` : w;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = w;
+    } else {
+      line = test;
+    }
+  });
+  if (line) lines.push(line);
+  return lines;
+}
+
+function renderNdaImages(fullName, signatureCanvas) {
+  const date = new Date().toLocaleDateString("en-US");
+  const W = 1275;
+  const margin = 110;
+  const body = "22px Georgia, serif";
+  const lineH = 32;
+
+  const page = document.createElement("canvas");
+  const measure = page.getContext("2d");
+  measure.font = body;
+  const paragraphs = ndaParagraphs(fullName).map((p) =>
+    wrapText(measure, p, W - margin * 2)
+  );
+  const textHeight = paragraphs.reduce(
+    (h, lines) => h + lines.length * lineH + 18,
+    0
+  );
+  page.width = W;
+  page.height = margin + 70 + textHeight + 340;
+
+  const ctx = page.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, page.width, page.height);
+  ctx.fillStyle = "#111";
+  ctx.font = "bold 30px Georgia, serif";
+  ctx.textAlign = "center";
+  ctx.fillText(NDA_TITLE, W / 2, margin);
+  ctx.textAlign = "left";
+  ctx.font = body;
+  let y = margin + 70;
+  paragraphs.forEach((lines) => {
+    lines.forEach((l) => {
+      ctx.fillText(l, margin, y);
+      y += lineH;
+    });
+    y += 18;
+  });
+
+  const drawSignatureBlock = (target, top) => {
+    const t = target.getContext("2d");
+    t.drawImage(signatureCanvas, margin, top, 500, 160);
+    t.strokeStyle = "#111";
+    t.lineWidth = 1.5;
+    t.beginPath();
+    t.moveTo(margin, top + 165);
+    t.lineTo(margin + 520, top + 165);
+    t.stroke();
+    t.fillStyle = "#111";
+    t.font = "20px Georgia, serif";
+    t.fillText("Signature (Receiving Party)", margin, top + 195);
+    t.font = "24px Georgia, serif";
+    t.fillText(`Full Name (Receiving Party): ${fullName}`, margin, top + 235);
+    t.fillText(`Date: ${date}`, margin, top + 270);
+    t.font = "20px Georgia, serif";
+    t.fillText(
+      "Disclosing Party: Frame of Reference LLC",
+      W - margin - 440,
+      top + 235
+    );
+  };
+
+  drawSignatureBlock(page, y + 10);
+
+  const sig = document.createElement("canvas");
+  sig.width = W;
+  sig.height = 400;
+  const s = sig.getContext("2d");
+  s.fillStyle = "#fff";
+  s.fillRect(0, 0, sig.width, sig.height);
+  s.fillStyle = "#111";
+  s.font = "bold 24px Georgia, serif";
+  s.fillText(`${NDA_TITLE} — Signature`, margin, 60);
+  drawSignatureBlock(sig, 90);
+
+  return [
+    { name: "nda-agreement.png", dataUrl: page.toDataURL("image/png") },
+    { name: "nda-signature.png", dataUrl: sig.toDataURL("image/png") },
+  ];
+}
+
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () =>
+      resolve({ name: file.name, type: file.type, size: file.size, dataUrl: r.result });
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+function LocationStep({ locations, setLocations }) {
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
+
+  const search = async () => {
+    const q = query.trim();
+    if (!q) return;
+    setStatus("Searching…");
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`,
+        { headers: { Accept: "application/json" } }
+      );
+      const [hit] = await res.json();
+      if (!hit) {
+        setStatus(`No match for “${q}”`);
+        return;
+      }
+      const label = hit.display_name.split(",").slice(0, 3).join(",").trim();
+      setLocations((prev) =>
+        prev.some((l) => l.label === label)
+          ? prev
+          : [...prev, { label, lat: Number(hit.lat), lng: Number(hit.lon) }]
+      );
+      setQuery("");
+      setStatus("");
+    } catch {
+      setStatus("Search unavailable — try again");
+    }
+  };
+
+  return (
+    <div className="location-grid">
+      <div className="matrix-box p-4 font-mono">
+        <div className="flex items-center gap-2 border-b border-[rgba(0,255,65,0.35)] pb-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <circle cx="10.5" cy="10.5" r="6.5" stroke="#00ff41" strokeWidth="2" />
+            <path d="M15.5 15.5 21 21" stroke="#00ff41" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                search();
+              }
+            }}
+            placeholder="Select location…"
+            className="matrix-input flex-1 text-sm"
+            autoFocus
+          />
+        </div>
+        {status && <p className="mt-2 text-xs opacity-70">{status}</p>}
+        <ul className="mt-3 space-y-1 text-sm">
+          {locations.length === 0 ? (
+            <li>◉ Entire world</li>
+          ) : (
+            locations.map((l) => (
+              <li key={l.label} className="flex justify-between gap-2">
+                <span>◉ {l.label}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${l.label}`}
+                  onClick={() =>
+                    setLocations((prev) => prev.filter((p) => p.label !== l.label))
+                  }
+                  className="opacity-60 hover:opacity-100"
+                >
+                  ×
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+        <p className="mt-3 text-[11px] opacity-50">
+          Type a place and press Enter. Add as many as you need.
+        </p>
+      </div>
+      <Globe locations={locations} />
+    </div>
+  );
 }
 
 export default function TypeformFlow({ setStep }) {
-  const [phase, setPhase] = useState("intro");
-  const [introTitleDone, setIntroTitleDone] = useState(false);
-  const [ideaCarouselText, setIdeaCarouselText] = useState("");
-  const [ideaIndex, setIdeaIndex] = useState(0);
-  const [ideaDeleting, setIdeaDeleting] = useState(false);
-  const [ideaWaiting, setIdeaWaiting] = useState(false);
-
-  const [flowStep, setFlowStep] = useState(0);
-  const [history, setHistory] = useState([]);
-  const [idea, setIdea] = useState("");
-  const [category, setCategory] = useState(null);
-
-  const [branchTyped, setBranchTyped] = useState("");
-  const [branchTypingDone, setBranchTypingDone] = useState(true);
-  const [branchInput, setBranchInput] = useState("");
-  const [branchInputVisible, setBranchInputVisible] = useState(false);
-
+  const [path, setPath] = useState(null);
+  const [disclose, setDisclose] = useState(null);
+  const [stepIdx, setStepIdx] = useState(0);
+  const [locations, setLocations] = useState([]);
+  const [problemText, setProblemText] = useState("");
+  const [solutionText, setSolutionText] = useState("");
+  const [files, setFiles] = useState([]);
+  const [fileError, setFileError] = useState("");
+  const [ndaName, setNdaName] = useState("");
+  const [ndaAgree, setNdaAgree] = useState(false);
+  const [ndaImages, setNdaImages] = useState([]);
+  const [contact, setContact] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+  });
+  const [tickerItems, setTickerItems] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [sendSplash, setSendSplash] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
 
-  const canvasRef = useRef(null);
-  const drawingRef = useRef(false);
-  const lastPointRef = useRef(null);
+  const [ideaText, setIdeaText] = useState("");
+  const introTyped = useTypewriter(INTRO_QUESTION, 32);
+  const introDone = introTyped.length >= INTRO_QUESTION.length;
+
+  const sketchRef = useRef(null);
+  const signatureRef = useRef(null);
   const activeRef = useRef(null);
-  const branchInputRef = useRef(null);
+  const wheelLock = useRef(0);
 
-  const titleTyped = useTypewriter(IDEA_QUESTION, phase === "intro", 32);
+  const [sketchUrl, setSketchUrl] = useState(null);
+  const [signed, setSigned] = useState(false);
+  const sketch = useDrawPad(sketchRef, {
+    color: "#111",
+    width: 2,
+    onDraw: () => setSketchUrl(sketchRef.current.toDataURL("image/png")),
+  });
+  const signature = useDrawPad(signatureRef, {
+    color: "#0b1f66",
+    width: 2.6,
+    background: null,
+    onDraw: () => setSigned(true),
+  });
 
-  const branchQuestions = useMemo(
-    () => (category && BRANCH_QUESTIONS[category] ? BRANCH_QUESTIONS[category] : []),
-    [category]
-  );
+  const steps = path ? stepsFor(path, disclose) : [];
+  const current = steps[stepIdx];
 
-  const branchOffset = 2;
-  const branchIndex = flowStep - branchOffset;
-  const activeBranchQuestion =
-    branchIndex >= 0 ? branchQuestions[branchIndex] || "" : "";
-
-  const showCornerLogo = phase === "draw" && !sendSplash;
-
-  useEffect(() => {
-    if (phase !== "intro") return;
-    if (titleTyped.length < IDEA_QUESTION.length) return;
-    const t = setTimeout(() => setIntroTitleDone(true), 400);
-    return () => clearTimeout(t);
-  }, [phase, titleTyped]);
+  useEffect(() => setPortalReady(true), []);
 
   useEffect(() => {
-    if (!introTitleDone || phase !== "intro") return;
-    const currentIdea = ideaIndex % CYCLING_IDEAS.length;
-    const fullText = CYCLING_IDEAS[currentIdea];
-    if (ideaWaiting) return;
-
-    const typeDelay = ideaDeleting ? 8 : 20;
-    const pauseAfterType = 650;
-
-    const timerId = setTimeout(() => {
-      if (!ideaDeleting && ideaCarouselText === fullText) {
-        setIdeaWaiting(true);
-        setTimeout(() => {
-          setIdeaWaiting(false);
-          setIdeaDeleting(true);
-        }, pauseAfterType);
-      } else if (ideaDeleting && ideaCarouselText === "") {
-        setIdeaDeleting(false);
-        setIdeaIndex((prev) => (prev + 1) % CYCLING_IDEAS.length);
-      } else {
-        setIdeaCarouselText((prev) =>
-          ideaDeleting ? prev.slice(0, -1) : prev + fullText[prev.length]
-        );
-      }
-    }, typeDelay);
-
-    return () => clearTimeout(timerId);
-  }, [
-    introTitleDone,
-    phase,
-    ideaCarouselText,
-    ideaDeleting,
-    ideaWaiting,
-    ideaIndex,
-  ]);
-
-  useEffect(() => {
-    if (phase !== "flow" || flowStep < branchOffset || !activeBranchQuestion) {
-      return;
-    }
-    setBranchTyped("");
-    setBranchTypingDone(false);
-    setBranchInput("");
-    setBranchInputVisible(false);
-
-    let i = 0;
-    let cancelled = false;
-    const step = () => {
-      if (cancelled) return;
-      if (i >= activeBranchQuestion.length) {
-        setBranchTypingDone(true);
-        setBranchTyped("");
-        setTimeout(() => setBranchInputVisible(true), 200);
+    if (path || !introDone) return;
+    let idx = 0;
+    let pos = 0;
+    let deleting = false;
+    let timer;
+    const tick = () => {
+      const full = CYCLING_IDEAS[idx];
+      if (!deleting && pos === full.length) {
+        deleting = true;
+        timer = setTimeout(tick, 900);
         return;
       }
-      i += 1;
-      setBranchTyped(activeBranchQuestion.slice(0, i));
-      setTimeout(step, 26);
+      if (deleting && pos === 0) {
+        deleting = false;
+        idx = (idx + 1) % CYCLING_IDEAS.length;
+      }
+      pos += deleting ? -1 : 1;
+      setIdeaText(full.slice(0, pos));
+      timer = setTimeout(tick, deleting ? 10 : 24);
     };
-    const t = setTimeout(step, 120);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [phase, flowStep, activeBranchQuestion, branchOffset]);
+    timer = setTimeout(tick, 300);
+    return () => clearTimeout(timer);
+  }, [path, introDone]);
 
   useEffect(() => {
-    if (branchInputVisible && branchInputRef.current) {
-      branchInputRef.current.focus();
-    }
-  }, [branchInputVisible, flowStep]);
+    if (!path) return;
+    fetch(`/api/entries?type=${path === "problem" ? "problems" : "solutions"}`)
+      .then((r) => r.json())
+      .then((d) => setTickerItems((d.entries || []).map((e) => e.text)))
+      .catch(() => {});
+  }, [path]);
 
   useEffect(() => {
-    setPortalReady(true);
-    import("@/components/Logo3D");
-  }, []);
-
-  useEffect(() => {
-    if (phase === "draw") import("@/components/Logo3D");
-  }, [phase]);
-
-  useEffect(() => {
-    if (!["flow", "draw"].includes(phase)) return;
-    const t = setTimeout(() => {
-      activeRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-    }, 100);
-    return () => clearTimeout(t);
-  }, [phase, flowStep, branchInputVisible, branchTypingDone, history.length]);
-
-  const updateHistoryAnswer = (index, value) => {
-    setHistory((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], answer: value };
-      return next;
-    });
-    if (index === 0) setIdea(value);
-    if (index === 1) {
-      const cat = CATEGORIES.find((c) => c.label === value)?.key;
-      if (cat) setCategory(cat);
-    }
-  };
-
-  const proceedIdea = () => {
-    setHistory([{ question: IDEA_QUESTION, answer: idea.trim() }]);
-    setFlowStep(1);
-  };
-
-  const proceedCategory = (key) => {
-    setCategory(key);
-    setHistory((prev) => [
-      ...prev.slice(0, 1),
-      { question: CATEGORY_QUESTION, answer: categoryLabel(key) },
-    ]);
-    setFlowStep(branchOffset);
-  };
-
-  const proceedBranch = (answerText) => {
-    setHistory((prev) => [
-      ...prev,
-      { question: activeBranchQuestion, answer: answerText },
-    ]);
-    setBranchInput("");
-    if (branchIndex + 1 >= branchQuestions.length) {
-      setPhase("draw");
-      return;
-    }
-    setFlowStep((s) => s + 1);
-  };
-
-  const getCanvasContext = () => canvasRef.current?.getContext("2d") || null;
-
-  const drawSegment = (x0, y0, x1, y1) => {
-    const ctx = getCanvasContext();
-    if (!ctx) return;
-    ctx.strokeStyle = "#111";
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(x0, y0);
-    ctx.lineTo(x1, y1);
-    ctx.stroke();
-  };
-
-  const canvasCoords = (e) => {
-    const c = canvasRef.current;
-    if (!c) return { x: 0, y: 0 };
-    const r = c.getBoundingClientRect();
-    return {
-      x: (e.clientX - r.left) * (c.width / r.width),
-      y: (e.clientY - r.top) * (c.height / r.height),
-    };
-  };
-
-  useEffect(() => {
-    if (phase !== "draw") return;
-    const c = canvasRef.current;
-    if (!c) return;
-    const ctx = c.getContext("2d");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, c.width, c.height);
-  }, [phase]);
-
-  const clearCanvas = () => {
-    const c = canvasRef.current;
-    if (!c) return;
-    const ctx = c.getContext("2d");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, c.width, c.height);
-  };
-
-  const submitAll = (drawingMode = "canvas") => {
-    if (submitting) return;
-
-    let drawingPayload = null;
-    if (drawingMode === "canvas" && canvasRef.current) {
-      try {
-        drawingPayload = canvasRef.current.toDataURL("image/png");
-      } catch (err) {
-        console.warn("Could not export sketch:", err);
+    if (current === "media") {
+      sketch.clear();
+      if (sketchUrl) {
+        const img = new Image();
+        img.onload = () => sketchRef.current?.getContext("2d").drawImage(img, 0, 0);
+        img.src = sketchUrl;
       }
     }
+    if (current === "nda") {
+      signature.clear();
+      setSigned(false);
+    }
+    const t = setTimeout(
+      () => activeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      80
+    );
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current]);
 
-    const branchAnswers = history
-      .slice(branchOffset)
-      .map((item) => item.answer);
+  const next = () => setStepIdx((i) => Math.min(i + 1, steps.length - 1));
+
+  useEffect(() => {
+    if (current !== "location") return;
+    const onWheel = (e) => {
+      if (e.deltaY < 40 || Date.now() - wheelLock.current < 1200) return;
+      wheelLock.current = Date.now();
+      next();
+    };
+    window.addEventListener("wheel", onWheel, { passive: true });
+    return () => window.removeEventListener("wheel", onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, steps.length]);
+
+  const chooseDisclose = (value) => {
+    setDisclose(value);
+    if (value) setNdaImages([]);
+    setStepIdx(1);
+  };
+
+  const signNda = () => {
+    const images = renderNdaImages(ndaName.trim(), signatureRef.current);
+    setNdaImages(images);
+    const [first, ...rest] = ndaName.trim().split(" ");
+    setContact((c) => ({
+      ...c,
+      firstName: c.firstName || first || "",
+      lastName: c.lastName || rest.join(" "),
+    }));
+    next();
+  };
+
+  const addFiles = async (list) => {
+    setFileError("");
+    const picked = Array.from(list || []);
+    const all = [...files];
+    for (const f of picked) {
+      const total = all.reduce((s, x) => s + x.size, 0) + f.size;
+      if (total > MAX_UPLOAD_BYTES) {
+        setFileError("Files are limited to 3 MB total per submission.");
+        break;
+      }
+      all.push(await readFile(f));
+    }
+    setFiles(all);
+  };
+
+  const locationLabels = locations.length
+    ? locations.map((l) => l.label)
+    : ["Entire world"];
+
+  const summaryFor = (key) => {
+    switch (key) {
+      case "disclose":
+        return disclose ? "Yes" : "No";
+      case "nda":
+        return ndaImages.length ? `Signed by ${ndaName}` : "";
+      case "location":
+        return locationLabels.join(" · ");
+      case "problem":
+        return problemText;
+      case "solution":
+        return solutionText;
+      case "media":
+        return [
+          sketchUrl ? "Sketch" : null,
+          files.length ? `${files.length} file(s)` : null,
+        ]
+          .filter(Boolean)
+          .join(", ") || "Skipped";
+      default:
+        return "";
+    }
+  };
+
+  const submitAll = () => {
+    if (submitting) return;
+    const answers = steps
+      .filter((k) => k !== "contact" && k !== "nda")
+      .map((k) => ({ question: questionFor(k, path), answer: summaryFor(k) }));
+
+    const mainText = path === "problem" ? problemText : solutionText;
+    const listEntry =
+      path === "problem" || disclose
+        ? { text: mainText, locations: locationLabels }
+        : null;
+
+    const drawingDataUrl = path === "solution" ? sketchUrl : null;
 
     const payload = {
-      idea: (history[0]?.answer || idea).trim(),
-      category:
-        category === "other"
-          ? "Something else"
-          : categoryLabel(category) || history[1]?.answer || "",
-      branchQuestions,
-      branchAnswers,
-      drawingDataUrl: drawingPayload,
+      kind: path,
+      answers,
+      contact,
+      locations: locationLabels,
+      disclose: path === "solution" ? disclose : null,
+      ndaImages: disclose === false ? ndaImages : [],
+      drawingDataUrl,
+      files: files.map(({ name, type, dataUrl }) => ({ name, type, dataUrl })),
+      listEntry,
     };
 
     setSubmitting(true);
     setSendSplash(true);
-
     fetch("/api/manifestation", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -325,11 +556,9 @@ export default function TypeformFlow({ setStep }) {
     })
       .then((res) => res.json())
       .then((data) => {
-        if (!data.emailed && !data.sheet) {
-          console.warn("Email not sent — see EMAIL_SETUP.md", data);
-        }
+        if (!data.emailed) console.warn("Email not sent — see EMAIL_SETUP.md", data);
       })
-      .catch((err) => console.error("manifestation submit failed:", err));
+      .catch((err) => console.error("submit failed:", err));
 
     setTimeout(() => {
       setSubmitting(false);
@@ -338,26 +567,201 @@ export default function TypeformFlow({ setStep }) {
     }, 4200);
   };
 
-  const renderHistory = () =>
-    history.map((item, i) => (
-      <li key={`hist-${i}`} className="pb-6 mb-6 border-b border-gray-300 list-none">
-        <p className="mb-1 text-xs text-gray-500">Question {i + 1}</p>
-        <p className="mb-2 font-medium text-gray-900">{item.question}</p>
-        <label className="block text-xs text-gray-500 mb-1">Your answer</label>
-        <textarea
-          value={item.answer}
-          onChange={(e) => updateHistoryAnswer(i, e.target.value)}
-          rows={i === 0 ? 4 : 3}
-          className="w-full resize-none bg-white border border-gray-200 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600 text-gray-800 relative z-20"
-        />
-      </li>
-    ));
+  const contactValid =
+    contact.firstName.trim() && contact.lastName.trim() && /\S+@\S+\.\S+/.test(contact.email);
+
+  const renderStep = (key) => {
+    switch (key) {
+      case "disclose":
+        return (
+          <div className="flex gap-3">
+            <button type="button" className="flow-btn flex-1" onClick={() => chooseDisclose(true)}>
+              Yes
+            </button>
+            <button type="button" className="flow-btn flex-1" onClick={() => chooseDisclose(false)}>
+              No
+            </button>
+          </div>
+        );
+      case "nda":
+        return (
+          <div>
+            <div className="h-64 overflow-y-auto bg-white text-gray-900 p-4 text-xs leading-relaxed font-serif">
+              <p className="font-bold text-center mb-3">{NDA_TITLE}</p>
+              {ndaParagraphs(ndaName.trim() || "[your name]").map((p, i) => (
+                <p key={i} className="mb-2">
+                  {p}
+                </p>
+              ))}
+            </div>
+            <label className="block mt-4 text-xs text-gray-400">Full legal name</label>
+            <input
+              className="flow-field mt-1"
+              value={ndaName}
+              onChange={(e) => setNdaName(e.target.value)}
+              placeholder="First Last"
+            />
+            <label className="block mt-4 text-xs text-gray-400">
+              Sign below with your mouse or finger
+            </label>
+            <canvas
+              ref={signatureRef}
+              width={500}
+              height={160}
+              className="w-full mt-1 bg-white touch-none cursor-crosshair"
+              {...signature.handlers}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                signature.clear();
+                setSigned(false);
+              }}
+              className="mt-1 text-xs text-gray-400 underline"
+            >
+              Clear signature
+            </button>
+            <label className="flex items-start gap-2 mt-4 text-sm text-gray-300">
+              <input
+                type="checkbox"
+                checked={ndaAgree}
+                onChange={(e) => setNdaAgree(e.target.checked)}
+                className="mt-1"
+              />
+              I have read and agree to this Non-Disclosure Agreement, and my typed name
+              and drawn signature are my electronic signature.
+            </label>
+            <button
+              type="button"
+              className="flow-btn w-full mt-4"
+              disabled={!ndaAgree || !ndaName.trim() || !signed}
+              onClick={signNda}
+            >
+              Sign &amp; continue
+            </button>
+          </div>
+        );
+      case "location":
+        return (
+          <div>
+            <LocationStep locations={locations} setLocations={setLocations} />
+            <button type="button" className="flow-btn w-full mt-4 text-center" onClick={next}>
+              Scroll or click to continue ↓
+            </button>
+          </div>
+        );
+      case "problem":
+      case "solution": {
+        const value = key === "problem" ? problemText : solutionText;
+        const setValue = key === "problem" ? setProblemText : setSolutionText;
+        return (
+          <div>
+            <textarea
+              className="flow-field resize-none"
+              rows={5}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              autoFocus
+            />
+            <button
+              type="button"
+              className="flow-btn w-full mt-3 text-center"
+              disabled={!value.trim()}
+              onClick={next}
+            >
+              Next
+            </button>
+          </div>
+        );
+      }
+      case "media":
+        return (
+          <div>
+            <p className="text-xs text-gray-400 mb-1">Draw your solution</p>
+            <canvas
+              ref={sketchRef}
+              width={360}
+              height={220}
+              className="w-full bg-white touch-none cursor-crosshair"
+              {...sketch.handlers}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                sketch.clear();
+                setSketchUrl(null);
+              }}
+              className="mt-1 text-xs text-gray-400 underline"
+            >
+              Clear drawing
+            </button>
+            <label className="block mt-4 text-sm text-[color:var(--matrix)] underline cursor-pointer">
+              Upload files
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => addFiles(e.target.files)}
+              />
+            </label>
+            {fileError && <p className="text-xs text-red-400 mt-1">{fileError}</p>}
+            {files.length > 0 && (
+              <ul className="mt-2 text-xs text-gray-300 space-y-1">
+                {files.map((f) => (
+                  <li key={f.name} className="flex justify-between">
+                    <span>{f.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setFiles((all) => all.filter((x) => x.name !== f.name))}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button type="button" className="flow-btn w-full mt-4 text-center" onClick={next}>
+              Next
+            </button>
+          </div>
+        );
+      case "contact":
+        return (
+          <div className="grid gap-3">
+            {[
+              ["firstName", "First name", "text"],
+              ["lastName", "Last name", "text"],
+              ["email", "Email", "email"],
+              ["phone", "Phone number", "tel"],
+            ].map(([field, label, type]) => (
+              <label key={field} className="text-xs text-gray-400">
+                {label}
+                <input
+                  type={type}
+                  className="flow-field mt-1"
+                  value={contact[field]}
+                  onChange={(e) => setContact((c) => ({ ...c, [field]: e.target.value }))}
+                />
+              </label>
+            ))}
+            <button
+              type="button"
+              className="flow-btn w-full mt-2 text-center"
+              disabled={!contactValid || submitting}
+              onClick={submitAll}
+            >
+              {path === "problem" ? "Send problem" : "Send solution"}
+            </button>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <>
-      {showCornerLogo && (
-        <Logo3D variant="corner" className="manifestation-logo-corner" />
-      )}
+      {path && <PerimeterTicker items={tickerItems} />}
 
       {portalReady &&
         sendSplash &&
@@ -365,255 +769,86 @@ export default function TypeformFlow({ setStep }) {
           <div
             className="fixed inset-0 z-[9999] manifestation-send-overlay manifestation-send-overlay--active pointer-events-none"
             aria-live="polite"
-            aria-label="Sending your manifestation"
           >
             <div className="manifestation-logo-stage">
               <Logo3D sending className="manifestation-logo-send" />
-              <p className="manifestation-send-caption">
-                Sending your manifestation…
-              </p>
+              <p className="manifestation-send-caption">Sending…</p>
             </div>
           </div>,
           document.body
         )}
 
-      <div className="relative z-20 max-w-[420px] w-11/12 text-black pt-8 pb-24 font-mono mx-auto">
-        {phase === "intro" && (
-          <div className="relative z-20">
-            <p className="min-h-[3.5rem]">
-              {titleTyped}
-              {titleTyped.length < IDEA_QUESTION.length && (
-                <span className="text-cyan-600 ml-0.5">_</span>
-              )}
+      <div className="relative z-20 max-w-[720px] w-11/12 text-white pt-8 pb-24 font-mono mx-auto">
+        {!path && (
+          <div>
+            <p className="text-lg min-h-[2rem]">
+              {introTyped}
+              {!introDone && <span className="matrix-cursor" />}
             </p>
-            {introTitleDone && (
-              <div className="mt-4 text-sm text-gray-500 min-h-[5rem]">
-                <span>{ideaCarouselText}</span>
-                <span className="text-cyan-600 ml-1">_</span>
-              </div>
-            )}
-            {introTitleDone && (
-              <button
-                type="button"
-                onClick={() => {
-                  setFlowStep(0);
-                  setHistory([]);
-                  setPhase("flow");
-                }}
-                className="mt-8 px-4 py-3 border-2 border-gray-800 w-full hover:bg-gray-100 relative z-20"
-              >
-                Continue
-              </button>
+            {introDone && (
+              <>
+                <p className="mt-3 text-sm text-gray-500 min-h-[3rem]">
+                  {ideaText}
+                  <span className="matrix-cursor" />
+                </p>
+                <div className="mt-6 grid gap-3">
+                  {Object.entries(PATHS).map(([key, label], i) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className="flow-btn"
+                      onClick={() => {
+                        setPath(key);
+                        setStepIdx(0);
+                      }}
+                    >
+                      {i + 1}. {label}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         )}
 
-        {(phase === "flow" || phase === "draw") && (
-          <div className="relative z-20">
-            {history.length > 0 && (
-              <p className="text-xs uppercase tracking-wide text-gray-500 mb-4">
-                Your answers — scroll up anytime to edit
-              </p>
-            )}
-            <ol className="space-y-0 list-none m-0 p-0">{renderHistory()}</ol>
-
-            {phase === "flow" && flowStep === 0 && (
-              <li ref={activeRef} className="scroll-mt-8 pb-6 list-none">
-                <p className="mb-1 text-xs text-cyan-700">Question 1</p>
-                <p className="mb-2 font-medium text-gray-900">{IDEA_QUESTION}</p>
-                <label className="block text-sm text-gray-500 mb-2">
-                  Type what you want to create
-                </label>
-                <textarea
-                  value={idea}
-                  onChange={(e) => setIdea(e.target.value)}
-                  placeholder="i want to create "
-                  rows={5}
-                  className="w-full resize-none bg-white border border-gray-200 p-3 focus:outline-none focus:ring-2 focus:ring-cyan-600 text-gray-900 relative z-20"
-                />
+        {path && (
+          <ol className="list-none m-0 p-0">
+            <li className="pb-4 mb-4 border-b border-gray-800 text-sm">
+              <p className="text-gray-500 text-xs">{INTRO_QUESTION}</p>
+              <button
+                type="button"
+                className="text-left hover:text-[color:var(--matrix)]"
+                onClick={() => {
+                  setPath(null);
+                  setDisclose(null);
+                  setStepIdx(0);
+                }}
+              >
+                {PATHS[path]}
+              </button>
+            </li>
+            {steps.slice(0, stepIdx).map((key, i) => (
+              <li key={key} className="pb-4 mb-4 border-b border-gray-800 text-sm">
+                <p className="text-gray-500 text-xs">{questionFor(key, path)}</p>
                 <button
                   type="button"
-                  onClick={() => {
-                    setIdea("I'll share more later");
-                    proceedIdea();
-                  }}
-                  className="mt-3 text-sm text-gray-500 underline hover:text-gray-800 relative z-20"
+                  className="text-left hover:text-[color:var(--matrix)]"
+                  onClick={() => setStepIdx(i)}
                 >
-                  Skip — I&apos;ll describe later
-                </button>
-                <button
-                  type="button"
-                  onClick={proceedIdea}
-                  className="mt-4 px-4 py-3 border-2 border-gray-800 w-full hover:bg-gray-100 relative z-20"
-                >
-                  Next
+                  {summaryFor(key) || "—"}
                 </button>
               </li>
-            )}
-
-            {phase === "flow" && flowStep === 1 && (
-              <li ref={activeRef} className="scroll-mt-8 pb-6 list-none">
-                <p className="mb-1 text-xs text-cyan-700">Question 2</p>
-                <p className="mb-4 font-medium text-gray-900">{CATEGORY_QUESTION}</p>
-                <div className="flex flex-col gap-2 relative z-20">
-                  {CATEGORIES.map((c) => (
-                    <button
-                      key={c.key}
-                      type="button"
-                      onClick={() => proceedCategory(c.key)}
-                      className="text-left px-4 py-3 border-2 border-gray-300 hover:border-gray-800 hover:bg-gray-50 bg-white"
-                    >
-                      {c.label}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => proceedCategory("other")}
-                    className="text-center px-4 py-2 text-sm text-gray-500 underline hover:text-gray-800"
-                  >
-                    Skip — not sure how to categorize
-                  </button>
-                </div>
-              </li>
-            )}
-
-            {phase === "flow" && flowStep >= branchOffset && (
-              <li ref={activeRef} className="scroll-mt-8 pb-6 list-none">
-                <p className="mb-1 text-xs text-cyan-700">
-                  Question {flowStep + 1}
+            ))}
+            {current && (
+              <li ref={activeRef} className="scroll-mt-8 pb-6">
+                <p className="mb-1 text-xs text-[color:var(--matrix)]">
+                  Question {stepIdx + 1} of {steps.length}
                 </p>
-                {!branchTypingDone ? (
-                  <p className="mb-2 font-medium text-gray-900">
-                    {branchTyped}
-                    <span className="text-cyan-600 ml-0.5">_</span>
-                  </p>
-                ) : (
-                  <p className="mb-2 font-medium text-gray-900">
-                    {activeBranchQuestion}
-                  </p>
-                )}
-                {branchInputVisible && (
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start mt-2 relative z-20">
-                    <textarea
-                      ref={branchInputRef}
-                      value={branchInput}
-                      onChange={(e) => setBranchInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          if (branchInput.trim()) proceedBranch(branchInput.trim());
-                        }
-                      }}
-                      rows={3}
-                      className="flex-1 w-full resize-none bg-white border border-gray-200 p-2 focus:outline-none focus:ring-2 focus:ring-cyan-600"
-                    />
-                    <div className="flex flex-col gap-2 shrink-0">
-                      <button
-                        type="button"
-                        disabled={!branchInput.trim()}
-                        onClick={() => proceedBranch(branchInput.trim())}
-                        className="px-3 py-2 border-2 border-gray-800 disabled:opacity-40 bg-white"
-                      >
-                        Next
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => proceedBranch("")}
-                        className="px-3 py-2 border border-gray-400 text-gray-600 text-sm hover:bg-gray-50 bg-white"
-                      >
-                        Skip question
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <TypedQuestion key={current} text={questionFor(current, path)} />
+                {renderStep(current)}
               </li>
             )}
-
-            {phase === "draw" && (
-              <li ref={activeRef} className="scroll-mt-8 pb-6 list-none relative z-20">
-                <p className="mb-1 text-xs text-cyan-700">Sketch your idea</p>
-                <p className="mb-2">
-                  Want to sketch your idea? Use the pad below—or skip.
-                </p>
-                <canvas
-                  ref={canvasRef}
-                  width={360}
-                  height={220}
-                  className="w-full max-w-md border-2 border-gray-300 touch-none cursor-crosshair bg-white"
-                  onMouseDown={(e) => {
-                    drawingRef.current = true;
-                    const { x, y } = canvasCoords(e);
-                    lastPointRef.current = { x, y };
-                  }}
-                  onMouseMove={(e) => {
-                    if (!drawingRef.current || !lastPointRef.current) return;
-                    const { x, y } = canvasCoords(e);
-                    const { x: x0, y: y0 } = lastPointRef.current;
-                    drawSegment(x0, y0, x, y);
-                    lastPointRef.current = { x, y };
-                  }}
-                  onMouseUp={() => {
-                    drawingRef.current = false;
-                    lastPointRef.current = null;
-                  }}
-                  onMouseLeave={() => {
-                    drawingRef.current = false;
-                    lastPointRef.current = null;
-                  }}
-                  onTouchStart={(e) => {
-                    e.preventDefault();
-                    const t = e.touches[0];
-                    drawingRef.current = true;
-                    lastPointRef.current = canvasCoords({
-                      clientX: t.clientX,
-                      clientY: t.clientY,
-                    });
-                  }}
-                  onTouchMove={(e) => {
-                    e.preventDefault();
-                    if (!drawingRef.current || !lastPointRef.current) return;
-                    const t = e.touches[0];
-                    const { x, y } = canvasCoords({
-                      clientX: t.clientX,
-                      clientY: t.clientY,
-                    });
-                    const { x: x0, y: y0 } = lastPointRef.current;
-                    drawSegment(x0, y0, x, y);
-                    lastPointRef.current = { x, y };
-                  }}
-                  onTouchEnd={() => {
-                    drawingRef.current = false;
-                    lastPointRef.current = null;
-                  }}
-                />
-                <div className="flex flex-wrap gap-2 mt-4">
-                  <button
-                    type="button"
-                    onClick={clearCanvas}
-                    className="px-4 py-2 border-2 border-gray-400 bg-white"
-                  >
-                    Clear
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => submitAll("skip")}
-                    disabled={submitting}
-                    className="px-4 py-2 border-2 border-gray-800 bg-white"
-                  >
-                    Skip drawing &amp; send
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => submitAll("canvas")}
-                    disabled={submitting}
-                    className="px-4 py-2 border-2 border-black bg-gray-900 text-white"
-                  >
-                    Send manifestation
-                  </button>
-                </div>
-              </li>
-            )}
-          </div>
+          </ol>
         )}
       </div>
     </>
