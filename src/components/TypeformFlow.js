@@ -6,9 +6,7 @@ import { NDA_TITLE, ndaParagraphs } from "@/data/nda";
 
 const Logo3D = dynamic(() => import("@/components/Logo3D"), {
   ssr: false,
-  loading: () => (
-    <div className="manifestation-logo-fallback manifestation-logo-fallback--loading" />
-  ),
+  loading: () => null,
 });
 const Globe = dynamic(() => import("@/components/Globe"), { ssr: false });
 
@@ -230,20 +228,8 @@ function renderNdaImages(fullName, signatureCanvas) {
 
   drawSignatureBlock(page, y + 10);
 
-  const sig = document.createElement("canvas");
-  sig.width = W;
-  sig.height = 400;
-  const s = sig.getContext("2d");
-  s.fillStyle = "#fff";
-  s.fillRect(0, 0, sig.width, sig.height);
-  s.fillStyle = "#111";
-  s.font = "bold 24px Georgia, serif";
-  s.fillText(`${NDA_TITLE} — Signature`, margin, 60);
-  drawSignatureBlock(sig, 90);
-
   return [
-    { name: "nda-agreement.png", dataUrl: page.toDataURL("image/png") },
-    { name: "nda-signature.png", dataUrl: sig.toDataURL("image/png") },
+    { name: "signed-nda.png", dataUrl: page.toDataURL("image/png") },
   ];
 }
 
@@ -796,7 +782,7 @@ export default function TypeformFlow({ setStep }) {
                     <button
                       key={key}
                       type="button"
-                      className="flow-btn"
+                      className="flow-btn path-choice"
                       onClick={() => {
                         setPath(key);
                         setStepIdx(0);

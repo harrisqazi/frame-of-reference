@@ -42,15 +42,17 @@ if (typeof window !== "undefined") {
 function rainbowMarble() {
   const mat = new THREE.MeshPhysicalMaterial({
     color: "#ffffff",
-    metalness: 0.15,
-    roughness: 0.04,
+    metalness: 0.28,
+    roughness: 0.06,
     clearcoat: 1,
-    clearcoatRoughness: 0.02,
-    iridescence: 0.7,
-    iridescenceIOR: 1.6,
-    envMapIntensity: 2.2,
+    clearcoatRoughness: 0.015,
+    iridescence: 1,
+    iridescenceIOR: 1.9,
+    iridescenceThicknessRange: [120, 1000],
+    envMapIntensity: 3,
   });
-  // The GLB has no UVs, so the swirl is computed from object-space position.
+  // The GLB has no UVs. Build the photographed glitter, dark glass and
+  // broad prismatic equator directly from the sphere's object-space position.
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vObjPos;")
@@ -65,16 +67,30 @@ function rainbowMarble() {
 varying vec3 vObjPos;
 vec3 hue2rgb(float h) {
   return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+}
+float marbleHash(vec3 p) {
+  p = fract(p * 0.1031);
+  p += dot(p, p.yzx + 33.33);
+  return fract((p.x + p.y) * p.z);
 }`
       )
       .replace(
         "vec4 diffuseColor = vec4( diffuse, opacity );",
         `vec3 mp = normalize(vObjPos);
-float swirl = mp.x * 2.2 + sin(mp.y * 4.0 + sin(mp.z * 5.0) * 1.6) * 1.4
-  + sin(mp.z * 3.0 + mp.x * 2.0) * 0.7;
-vec3 marble = hue2rgb(fract(swirl * 0.22));
-float vein = smoothstep(0.75, 1.0, abs(sin(swirl * 3.1)));
-vec4 diffuseColor = vec4(mix(marble, vec3(1.0), vein * 0.55) * diffuse, opacity);`
+float angle = atan(mp.z, mp.x) / 6.2831853;
+float slant = mp.y + mp.x * 0.14 + sin(mp.z * 3.0) * 0.035;
+float broadBand = exp(-pow(abs(slant) / 0.19, 2.0));
+float hotBand = exp(-pow(abs(slant - 0.075) / 0.045, 2.0));
+vec3 spectrum = hue2rgb(fract(angle + mp.y * 0.72 + 0.08));
+vec3 warmSpectrum = hue2rgb(fract(angle + mp.x * 0.3 + 0.98));
+float grain = marbleHash(floor(vObjPos * 4.8));
+float glitter = smoothstep(0.82, 0.995, grain);
+vec3 glassBlack = vec3(0.008, 0.014, 0.016);
+vec3 marble = mix(glassBlack, spectrum * 0.95 + 0.12, glitter);
+marble += spectrum * broadBand * 1.15;
+marble += warmSpectrum * hotBand * 1.45;
+marble += vec3(0.72, 0.92, 0.96) * pow(max(mp.y, 0.0), 5.0) * 0.65;
+vec4 diffuseColor = vec4(marble * diffuse, opacity);`
       );
   };
   return mat;
@@ -89,15 +105,15 @@ function isInnerBall(mesh) {
 
 function iridescentChrome(src) {
   const mat = new THREE.MeshPhysicalMaterial({
-    color: "#f4f7fa",
+    color: "#07100f",
     metalness: 1,
-    roughness: 0.06,
+    roughness: 0.045,
     clearcoat: 1,
-    clearcoatRoughness: 0.04,
-    iridescence: 1,
-    iridescenceIOR: 1.9,
-    iridescenceThicknessRange: [180, 900],
-    envMapIntensity: 2.6,
+    clearcoatRoughness: 0.025,
+    iridescence: 0.38,
+    iridescenceIOR: 1.55,
+    iridescenceThicknessRange: [100, 420],
+    envMapIntensity: 3.4,
   });
   if (src?.normalMap) mat.normalMap = src.normalMap;
   return mat;
@@ -144,8 +160,8 @@ function LogoModel({ mode, sendProgress }) {
         child.material = isInnerBall(child)
           ? rainbowMarble()
           : Array.isArray(child.material)
-          ? child.material.map(iridescentChrome)
-          : iridescentChrome(child.material);
+            ? child.material.map(iridescentChrome)
+            : iridescentChrome(child.material);
       }
     });
     return clone;

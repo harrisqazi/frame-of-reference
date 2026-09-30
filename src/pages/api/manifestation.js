@@ -81,7 +81,7 @@ function buildEmailText(body) {
   if (body.kind === "solution") {
     lines.push(
       body.ndaImages?.length
-        ? "NDA: signed — attached as nda-agreement.png and nda-signature.png"
+        ? "NDA: signed — attached as signed-nda.png (signature included)"
         : "NDA: not required (disclosure allowed)"
     );
   }

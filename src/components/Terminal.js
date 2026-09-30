@@ -6,7 +6,7 @@ const Logo3D = dynamic(() => import("@/components/Logo3D"), { ssr: false });
 const SENSE_PHRASES = [
   "the vision",
   "the taste",
-  "the feeling",
+  "the touch",
   "the smell",
   "the sound",
 ];
@@ -15,7 +15,7 @@ const SENSE_PHRASES = [
 const SENSE_MARK = "\u0001";
 
 const SCRIPT = [
-  { action: "type", text: "Remember that dream you held.", delay: 40 },
+  { action: "type", text: "Imagine that dream you held.", delay: 40 },
   { action: "wait", ms: 900 },
   { action: "flash", text: "VISUALIZE IT", ms: 1100 },
   { action: "type", text: "\n\nBring it back for a moment", delay: 40 },
@@ -46,6 +46,7 @@ const TerminalSimulator = ({ step, setStep }) => {
   const [senseWord, setSenseWord] = useState("");
   const [senseAppearing, setSenseAppearing] = useState(false);
   const [senseActive, setSenseActive] = useState(false);
+  const [logoVisible, setLogoVisible] = useState(false);
 
   const [scrollPosition, setScrollPosition] = useState(0);
   const [images, setImages] = useState([]);
@@ -54,6 +55,7 @@ const TerminalSimulator = ({ step, setStep }) => {
   const lastFrameTimeRef = useRef(0);
   const rafRef = useRef(null);
   const hasAdvancedRef = useRef(false);
+  const didPositionScrollRef = useRef(false);
   const scriptRunIdRef = useRef(0);
 
   const imgRef = useRef();
@@ -137,6 +139,7 @@ const TerminalSimulator = ({ step, setStep }) => {
             if (!live()) return;
             setContent(base + ".".repeat(d));
           }
+          setLogoVisible(true);
           await wait(segment.interval * 2);
         } else if (segment.action === "cycle") {
           setCountdownLabel("");
@@ -199,6 +202,17 @@ const TerminalSimulator = ({ step, setStep }) => {
     setImages(loadedImages);
   }, [stepSize]);
 
+  useEffect(() => {
+    if (!images.length || didPositionScrollRef.current) return;
+    didPositionScrollRef.current = true;
+    if ("scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+    requestAnimationFrame(() =>
+      window.scrollTo(0, document.documentElement.scrollHeight)
+    );
+  }, [images]);
+
   const getScrollTop = () =>
     window.pageYOffset ||
     document.documentElement.scrollTop ||
@@ -206,7 +220,13 @@ const TerminalSimulator = ({ step, setStep }) => {
     0;
 
   const getTargetIndex = useCallback(() => {
-    const index = Math.ceil(getScrollTop() / scrollAmountPerImage);
+    const maxScroll = Math.max(
+      0,
+      document.documentElement.scrollHeight - window.innerHeight
+    );
+    const index = Math.ceil(
+      (maxScroll - getScrollTop()) / scrollAmountPerImage
+    );
     return Math.min(maxFrameIndex, Math.max(0, index));
   }, [maxFrameIndex, scrollAmountPerImage]);
 
@@ -299,7 +319,9 @@ const TerminalSimulator = ({ step, setStep }) => {
               senseWord.split("").map((ch, i) => (
                 <span
                   key={i}
-                  className={senseAppearing ? "appear-char" : undefined}
+                  className={
+                    senseAppearing ? "vanish-char vanish-char--in" : undefined
+                  }
                   style={
                     senseAppearing ? { animationDelay: `${i * 28}ms` } : undefined
                   }
@@ -327,19 +349,35 @@ const TerminalSimulator = ({ step, setStep }) => {
       {step === 0 && (
         <>
           <div style={{ height: `${scrollSpacerHeight}px` }} />
-          <div className="fixed w-screen h-screen z-20 text-white overflow-hidden">
+          <div className="fixed inset-0 z-0 text-white overflow-hidden">
             <img
               ref={imgRef}
               alt=""
               className="object-cover object-center w-full h-full"
             />
           </div>
+          {scrollPosition * stepSize >= 259 &&
+            scrollPosition * stepSize <= 616 && (
+              <div className="water-droplets" aria-hidden="true">
+                {Array.from({ length: 18 }, (_, i) => (
+                  <i
+                    key={i}
+                    style={{
+                      "--x": `${(i * 37 + 9) % 100}%`,
+                      "--delay": `${-((i * 0.41) % 3.2)}s`,
+                      "--duration": `${2.2 + (i % 5) * 0.28}s`,
+                      "--size": `${5 + (i % 4) * 3}px`,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           <div
             style={{ opacity }}
-            className="fixed h-screen w-full p-12 flex justify-center"
+            className="fixed inset-0 z-10 p-6 phone:p-12 flex justify-center"
           >
-            <div className="relative z-10 text-white text-left w-[400px] pt-8 max-w-11/12 font-mono">
-              <p>
+            <div className="intro-copy relative z-10 text-white text-left w-[400px] pt-8 max-w-11/12 font-mono">
+              <p className="bg-transparent">
                 {renderText()}
                 {countdownLabel && (
                   <span className="block mt-6 text-2xl text-white/90">
@@ -348,7 +386,7 @@ const TerminalSimulator = ({ step, setStep }) => {
                 )}
               </p>
             </div>
-            <Logo3D variant="hero" className="intro-logo" />
+            {logoVisible && <Logo3D variant="hero" className="intro-logo" />}
 
             <div className="absolute z-10 phone:bottom-24 bottom-12 w-full flex justify-center pointer-events-auto">
               <button
@@ -360,7 +398,7 @@ const TerminalSimulator = ({ step, setStep }) => {
                     : "opacity-0 pointer-events-none"
                 }`}
               >
-                Scroll to Proceed
+                Scroll Up to Proceed
               </button>
             </div>
           </div>
