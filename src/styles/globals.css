@@ -207,12 +207,12 @@ body {
 
 .matrix-cursor {
   display: inline-block;
-  width: 2px;
+  width: 3px;
   height: 1.1em;
   margin-left: 3px;
   vertical-align: text-bottom;
-  background: var(--matrix);
-  box-shadow: 0 0 4px rgba(0, 143, 17, 0.6);
+  background: #00b32c;
+  box-shadow: 0 0 6px rgba(0, 179, 44, 0.85);
   animation: matrix-blink 1.2s step-end infinite;
 }
 
@@ -235,11 +235,6 @@ body {
   animation-fill-mode: backwards;
   animation-duration: 0.32s;
 }
-
-.vanish-char--delete {
-  animation-duration: 0.12s;
-}
-
 @keyframes intro-logo-fade {
   from { opacity: 0; transform: scale(0.96); }
   to { opacity: 0.58; transform: scale(1); }
@@ -256,8 +251,7 @@ body {
 }
 
 .intro-copy,
-.intro-copy p,
-.intro-copy span {
+.intro-copy p {
   background: transparent;
 }
 

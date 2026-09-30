@@ -13,6 +13,8 @@ const SENSE_PHRASES = [
 
 // Marks a typed line that should sit on the right side of its row.
 const SENSE_MARK = "\u0001";
+const CENTER_MARK = "\u0002";
+const SENSE_SLOT_CH = Math.max(...SENSE_PHRASES.map((p) => p.length)) + 1;
 
 const SCRIPT = [
   { action: "type", text: "Remember that dream you held.", delay: 40 },
@@ -31,10 +33,15 @@ const SCRIPT = [
     appearStagger: 28,
     appearMs: 320,
     holdMs: 450,
-    deleteDelay: 22,
+    vanishStagger: 45,
+    vanishMs: 450,
   },
   { action: "wait", ms: 500 },
-  { action: "type", text: "\n\nNow take it to the source.", delay: 50 },
+  {
+    action: "type",
+    text: `\n\n${CENTER_MARK}Now take it to the source.`,
+    delay: 50,
+  },
 ];
 
 const TerminalSimulator = ({ step, setStep }) => {
@@ -45,7 +52,7 @@ const TerminalSimulator = ({ step, setStep }) => {
   const [flashOverlay, setFlashOverlay] = useState(null);
   const [senseWord, setSenseWord] = useState("");
   const [senseAppearing, setSenseAppearing] = useState(false);
-  const [senseDeleting, setSenseDeleting] = useState(0);
+  const [senseVanishing, setSenseVanishing] = useState(false);
   const [senseActive, setSenseActive] = useState(false);
   const [logoVisible, setLogoVisible] = useState(false);
 
@@ -56,7 +63,6 @@ const TerminalSimulator = ({ step, setStep }) => {
   const lastFrameTimeRef = useRef(0);
   const rafRef = useRef(null);
   const hasAdvancedRef = useRef(false);
-  const didPositionScrollRef = useRef(false);
   const scriptRunIdRef = useRef(0);
   const preloadedRef = useRef(new Set());
 
@@ -134,22 +140,25 @@ const TerminalSimulator = ({ step, setStep }) => {
           await wait(segment.ms);
         } else if (segment.action === "dots") {
           setCountdownLabel("");
-          // Even beat: silence, dot, dot, dot, silence — one beat apart.
+          // Scheduled against a fixed start time so main-thread jank
+          // can't push later dots off the beat.
           const base = content;
+          const start = performance.now();
           for (let d = 1; d <= segment.count; d++) {
-            await wait(segment.interval);
+            await wait(start + d * segment.interval - performance.now());
             if (!live()) return;
             setContent(base + ".".repeat(d));
           }
+          await wait(start + (segment.count + 1) * segment.interval - performance.now());
           setLogoVisible(true);
-          await wait(segment.interval * 2);
+          await wait(segment.interval);
         } else if (segment.action === "cycle") {
           setCountdownLabel("");
           setSenseActive(true);
           for (let p = 0; p < segment.phrases.length; p++) {
             if (!live()) return;
             const phrase = segment.phrases[p];
-            setSenseDeleting(0);
+            setSenseVanishing(false);
             setSenseAppearing(true);
             setSenseWord(phrase);
             await wait(phrase.length * segment.appearStagger + segment.appearMs);
@@ -157,16 +166,12 @@ const TerminalSimulator = ({ step, setStep }) => {
             setSenseAppearing(false);
             if (p === segment.phrases.length - 1) break;
             await wait(segment.holdMs);
-            for (let c = phrase.length; c > 0; c--) {
-              if (!live()) return;
-              setSenseWord(phrase.slice(0, c));
-              setSenseDeleting(c);
-              await wait(120);
-              if (!live()) return;
-              setSenseWord(phrase.slice(0, c - 1));
-              setSenseDeleting(0);
-              await wait(segment.deleteDelay);
-            }
+            if (!live()) return;
+            setSenseVanishing(true);
+            await wait(phrase.length * segment.vanishStagger + segment.vanishMs);
+            if (!live()) return;
+            setSenseWord("");
+            setSenseVanishing(false);
           }
           if (!live()) return;
           setSenseWord("");
@@ -208,17 +213,6 @@ const TerminalSimulator = ({ step, setStep }) => {
     setImages(loadedImages);
   }, [stepSize]);
 
-  useEffect(() => {
-    if (!images.length || didPositionScrollRef.current) return;
-    didPositionScrollRef.current = true;
-    if ("scrollRestoration" in window.history) {
-      window.history.scrollRestoration = "manual";
-    }
-    requestAnimationFrame(() =>
-      window.scrollTo(0, document.documentElement.scrollHeight)
-    );
-  }, [images]);
-
   const getScrollTop = () =>
     window.pageYOffset ||
     document.documentElement.scrollTop ||
@@ -226,13 +220,7 @@ const TerminalSimulator = ({ step, setStep }) => {
     0;
 
   const getTargetIndex = useCallback(() => {
-    const maxScroll = Math.max(
-      0,
-      document.documentElement.scrollHeight - window.innerHeight
-    );
-    const index = Math.ceil(
-      (maxScroll - getScrollTop()) / scrollAmountPerImage
-    );
+    const index = Math.ceil(getScrollTop() / scrollAmountPerImage);
     return Math.min(maxFrameIndex, Math.max(0, index));
   }, [maxFrameIndex, scrollAmountPerImage]);
 
@@ -316,37 +304,65 @@ const TerminalSimulator = ({ step, setStep }) => {
     return lines.map((item, key) => {
       const isLast = key === lines.length - 1;
       const cycling = isLast && senseActive;
-      const rightAligned = cycling || item.startsWith(SENSE_MARK);
-      const Tag = rightAligned ? "span" : React.Fragment;
-      const alignProps = rightAligned
-        ? { className: "block text-right" }
-        : {};
-      return (
-        <span key={key}>
-          <Tag {...alignProps}>
-            {item.replace(SENSE_MARK, "")}
-            {cycling &&
-              senseWord.split("").map((ch, i) => (
+      const cursor = isLast && !countdownLabel && (
+        <span className="matrix-cursor" />
+      );
+
+      if (cycling || item.startsWith(SENSE_MARK)) {
+        const chars = cycling ? senseWord : item.slice(1);
+        // Fixed-width, left-aligned slot on the right of the row, so letters
+        // never shift while they appear or vanish.
+        return (
+          <span key={key} className="block text-right">
+            <span
+              className="inline-block text-left"
+              style={{ width: `${SENSE_SLOT_CH}ch` }}
+            >
+              {chars.split("").map((ch, i) => (
                 <span
-                  key={`${senseWord.length}-${i}-${senseDeleting}`}
+                  key={`${chars}-${i}`}
                   className={
-                    senseAppearing
+                    !cycling
+                      ? undefined
+                      : senseAppearing
                       ? "vanish-char vanish-char--in"
-                      : senseDeleting === senseWord.length &&
-                        i === senseWord.length - 1
-                      ? "vanish-char vanish-char--delete"
+                      : senseVanishing
+                      ? "vanish-char"
                       : undefined
                   }
                   style={
-                    senseAppearing ? { animationDelay: `${i * 28}ms` } : undefined
+                    !cycling
+                      ? undefined
+                      : senseAppearing
+                      ? { animationDelay: `${i * 28}ms` }
+                      : senseVanishing
+                      ? { animationDelay: `${(chars.length - 1 - i) * 45}ms` }
+                      : undefined
                   }
                 >
                   {ch === " " ? "\u00a0" : ch}
                 </span>
               ))}
-            {isLast && !countdownLabel && <span className="matrix-cursor" />}
-          </Tag>
-          {!rightAligned && <br />}
+              {cursor}
+            </span>
+          </span>
+        );
+      }
+
+      if (item.startsWith(CENTER_MARK)) {
+        return (
+          <span key={key} className="block text-center mt-[12vh]">
+            {item.slice(1)}
+            {cursor}
+          </span>
+        );
+      }
+
+      return (
+        <span key={key}>
+          {item}
+          {cursor}
+          <br />
         </span>
       );
     });
@@ -397,7 +413,7 @@ const TerminalSimulator = ({ step, setStep }) => {
                     : "opacity-0 pointer-events-none"
                 }`}
               >
-                Scroll Up to Proceed
+                Scroll to Proceed
               </button>
             </div>
           </div>
