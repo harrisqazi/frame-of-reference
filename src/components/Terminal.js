@@ -297,7 +297,9 @@ const TerminalSimulator = ({ step, setStep }) => {
     }
   }, [scrollPosition, images]);
 
-  const opacity = 1 - scrollPosition / Math.max(maxFrameIndex, 1);
+  // Fully faded out before the blue section of the sequence (source frame 259).
+  const fadeOutIndex = Math.floor(240 / stepSize);
+  const opacity = Math.max(0, 1 - scrollPosition / fadeOutIndex);
 
   const renderText = () => {
     const lines = typedText.split("\n");
@@ -380,7 +382,7 @@ const TerminalSimulator = ({ step, setStep }) => {
       {step === 0 && (
         <>
           <div style={{ height: `${scrollSpacerHeight}px` }} />
-          <div className="fixed inset-0 z-0 text-white overflow-hidden">
+          <div className="fixed w-screen h-screen z-20 text-white overflow-hidden">
             <img
               ref={imgRef}
               alt=""
@@ -389,7 +391,7 @@ const TerminalSimulator = ({ step, setStep }) => {
           </div>
           <div
             style={{ opacity }}
-            className="fixed inset-0 z-10 p-6 phone:p-12 flex justify-center"
+            className="fixed h-screen w-full p-12 flex justify-center"
           >
             <div className="intro-copy relative z-10 text-white text-left w-[400px] pt-8 max-w-11/12 font-mono">
               <p className="bg-transparent">

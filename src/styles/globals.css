@@ -242,9 +242,10 @@ body {
 
 .intro-logo {
   position: absolute;
-  inset: 0;
-  width: 100vw;
-  height: 100dvh;
+  left: 0;
+  right: 0;
+  top: 52vh;
+  bottom: 8.5rem;
   z-index: 0;
   pointer-events: none;
   animation: intro-logo-fade 1.8s ease-out both;
