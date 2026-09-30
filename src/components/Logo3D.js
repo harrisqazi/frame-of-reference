@@ -28,7 +28,7 @@ const MODEL_URL = "/models/3d-logo.glb";
 const MODE_CONFIG = {
   send: { scale: 2.6, fov: 46 },
   corner: { scale: 2.2, cameraZ: 3.1, fov: 48 },
-  hero: { scale: 2.75, cameraZ: 3.4, fov: 45 },
+  hero: { scale: 2.45, cameraZ: 3.4, fov: 45 },
 };
 
 const pointer = { x: 0, y: 0 };
@@ -276,7 +276,7 @@ export default function Logo3D({
     >
       <ModelErrorBoundary>
         <Canvas
-          dpr={[1, 2]}
+          dpr={[1, 1.5]}
           gl={{
             alpha: true,
             antialias: true,

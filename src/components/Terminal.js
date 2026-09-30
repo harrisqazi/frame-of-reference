@@ -15,7 +15,7 @@ const SENSE_PHRASES = [
 const SENSE_MARK = "\u0001";
 
 const SCRIPT = [
-  { action: "type", text: "Imagine that dream you held.", delay: 40 },
+  { action: "type", text: "Remember that dream you held.", delay: 40 },
   { action: "wait", ms: 900 },
   { action: "flash", text: "VISUALIZE IT", ms: 1100 },
   { action: "type", text: "\n\nBring it back for a moment", delay: 40 },
@@ -45,6 +45,7 @@ const TerminalSimulator = ({ step, setStep }) => {
   const [flashOverlay, setFlashOverlay] = useState(null);
   const [senseWord, setSenseWord] = useState("");
   const [senseAppearing, setSenseAppearing] = useState(false);
+  const [senseDeleting, setSenseDeleting] = useState(0);
   const [senseActive, setSenseActive] = useState(false);
   const [logoVisible, setLogoVisible] = useState(false);
 
@@ -57,6 +58,7 @@ const TerminalSimulator = ({ step, setStep }) => {
   const hasAdvancedRef = useRef(false);
   const didPositionScrollRef = useRef(false);
   const scriptRunIdRef = useRef(0);
+  const preloadedRef = useRef(new Set());
 
   const imgRef = useRef();
 
@@ -147,6 +149,7 @@ const TerminalSimulator = ({ step, setStep }) => {
           for (let p = 0; p < segment.phrases.length; p++) {
             if (!live()) return;
             const phrase = segment.phrases[p];
+            setSenseDeleting(0);
             setSenseAppearing(true);
             setSenseWord(phrase);
             await wait(phrase.length * segment.appearStagger + segment.appearMs);
@@ -154,9 +157,14 @@ const TerminalSimulator = ({ step, setStep }) => {
             setSenseAppearing(false);
             if (p === segment.phrases.length - 1) break;
             await wait(segment.holdMs);
-            for (let c = phrase.length - 1; c >= 0; c--) {
+            for (let c = phrase.length; c > 0; c--) {
               if (!live()) return;
               setSenseWord(phrase.slice(0, c));
+              setSenseDeleting(c);
+              await wait(120);
+              if (!live()) return;
+              setSenseWord(phrase.slice(0, c - 1));
+              setSenseDeleting(0);
               await wait(segment.deleteDelay);
             }
           }
@@ -196,8 +204,6 @@ const TerminalSimulator = ({ step, setStep }) => {
       const paddedIndex = String(i).padStart(4, "0");
       const imagePath = `/animation_3/640x360/AB_${paddedIndex}.png`;
       loadedImages.push(imagePath);
-      const img = new Image();
-      img.src = imagePath;
     }
     setImages(loadedImages);
   }, [stepSize]);
@@ -235,7 +241,11 @@ const TerminalSimulator = ({ step, setStep }) => {
       if (!images.length) return;
       for (let offset = 0; offset <= 12; offset++) {
         const target = index + offset;
-        if (target < images.length) {
+        if (
+          target < images.length &&
+          !preloadedRef.current.has(images[target])
+        ) {
+          preloadedRef.current.add(images[target]);
           const img = new Image();
           img.src = images[target];
         }
@@ -318,9 +328,14 @@ const TerminalSimulator = ({ step, setStep }) => {
             {cycling &&
               senseWord.split("").map((ch, i) => (
                 <span
-                  key={i}
+                  key={`${senseWord.length}-${i}-${senseDeleting}`}
                   className={
-                    senseAppearing ? "vanish-char vanish-char--in" : undefined
+                    senseAppearing
+                      ? "vanish-char vanish-char--in"
+                      : senseDeleting === senseWord.length &&
+                        i === senseWord.length - 1
+                      ? "vanish-char vanish-char--delete"
+                      : undefined
                   }
                   style={
                     senseAppearing ? { animationDelay: `${i * 28}ms` } : undefined
@@ -356,22 +371,6 @@ const TerminalSimulator = ({ step, setStep }) => {
               className="object-cover object-center w-full h-full"
             />
           </div>
-          {scrollPosition * stepSize >= 259 &&
-            scrollPosition * stepSize <= 616 && (
-              <div className="water-droplets" aria-hidden="true">
-                {Array.from({ length: 18 }, (_, i) => (
-                  <i
-                    key={i}
-                    style={{
-                      "--x": `${(i * 37 + 9) % 100}%`,
-                      "--delay": `${-((i * 0.41) % 3.2)}s`,
-                      "--duration": `${2.2 + (i % 5) * 0.28}s`,
-                      "--size": `${5 + (i % 4) * 3}px`,
-                    }}
-                  />
-                ))}
-              </div>
-            )}
           <div
             style={{ opacity }}
             className="fixed inset-0 z-10 p-6 phone:p-12 flex justify-center"
