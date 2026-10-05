@@ -30,11 +30,7 @@ const SCRIPT = [
   {
     action: "cycle",
     phrases: SENSE_PHRASES,
-    appearStagger: 28,
-    appearMs: 320,
-    holdMs: 450,
-    vanishStagger: 45,
-    vanishMs: 450,
+    beat: 600,
   },
   { action: "wait", ms: 500 },
   {
@@ -155,23 +151,24 @@ const TerminalSimulator = ({ step, setStep }) => {
         } else if (segment.action === "cycle") {
           setCountdownLabel("");
           setSenseActive(true);
+          // Each phrase spans three beats: appear, hold, vanish.
+          const start = performance.now();
+          const atBeat = (n) => wait(start + n * segment.beat - performance.now());
           for (let p = 0; p < segment.phrases.length; p++) {
             if (!live()) return;
-            const phrase = segment.phrases[p];
             setSenseVanishing(false);
             setSenseAppearing(true);
-            setSenseWord(phrase);
-            await wait(phrase.length * segment.appearStagger + segment.appearMs);
+            setSenseWord(segment.phrases[p]);
+            await atBeat(p * 3 + 1);
             if (!live()) return;
             setSenseAppearing(false);
             if (p === segment.phrases.length - 1) break;
-            await wait(segment.holdMs);
+            await atBeat(p * 3 + 2);
             if (!live()) return;
             setSenseVanishing(true);
-            await wait(phrase.length * segment.vanishStagger + segment.vanishMs);
+            await atBeat(p * 3 + 3);
             if (!live()) return;
             setSenseWord("");
-            setSenseVanishing(false);
           }
           if (!live()) return;
           setSenseWord("");
@@ -315,7 +312,7 @@ const TerminalSimulator = ({ step, setStep }) => {
         // Fixed-width, left-aligned slot on the right of the row, so letters
         // never shift while they appear or vanish.
         return (
-          <span key={key} className="block text-right">
+          <span key={key} className="block text-right text-xl">
             <span
               className="inline-block text-left"
               style={{ width: `${SENSE_SLOT_CH}ch` }}
@@ -336,9 +333,9 @@ const TerminalSimulator = ({ step, setStep }) => {
                     !cycling
                       ? undefined
                       : senseAppearing
-                      ? { animationDelay: `${i * 28}ms` }
+                      ? { animationDelay: `${i * 20}ms` }
                       : senseVanishing
-                      ? { animationDelay: `${(chars.length - 1 - i) * 45}ms` }
+                      ? { animationDelay: `${(chars.length - 1 - i) * 25}ms` }
                       : undefined
                   }
                 >
