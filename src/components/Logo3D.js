@@ -146,8 +146,9 @@ function SendCamera({ sendProgress }) {
   return null;
 }
 
-function LogoModel({ mode, sendProgress }) {
+function LogoModel({ mode, sendProgress, onReady }) {
   const group = useRef();
+  const readyFiredRef = useRef(false);
   const baseScaleRef = useRef(1);
   const { scene } = useGLTF(MODEL_URL);
   const config = MODE_CONFIG[mode] || MODE_CONFIG.corner;
@@ -169,6 +170,10 @@ function LogoModel({ mode, sendProgress }) {
 
   useFrame((state, delta) => {
     if (!group.current) return;
+    if (!readyFiredRef.current) {
+      readyFiredRef.current = true;
+      onReady?.();
+    }
     const t = state.clock.elapsedTime;
     const base = baseScaleRef.current;
 
@@ -214,7 +219,7 @@ function LogoModel({ mode, sendProgress }) {
   );
 }
 
-function Scene({ mode, sendProgress }) {
+function Scene({ mode, sendProgress, onReady }) {
   return (
     <>
       <Environment preset="warehouse" environmentIntensity={2.2} />
@@ -232,7 +237,7 @@ function Scene({ mode, sendProgress }) {
         color="#ffffff"
       />
       {mode === "send" && <SendCamera sendProgress={sendProgress} />}
-      <LogoModel mode={mode} sendProgress={sendProgress} />
+      <LogoModel mode={mode} sendProgress={sendProgress} onReady={onReady} />
     </>
   );
 }
@@ -242,6 +247,7 @@ export default function Logo3D({
   sending = false,
   className = "",
   onSendProgress,
+  onReady,
 }) {
   const mode = sending ? "send" : variant;
   const config = MODE_CONFIG[mode] || MODE_CONFIG.corner;
@@ -293,7 +299,7 @@ export default function Logo3D({
           }}
         >
           <Suspense fallback={null}>
-            <Scene mode={mode} sendProgress={sendProgress} />
+            <Scene mode={mode} sendProgress={sendProgress} onReady={onReady} />
           </Suspense>
         </Canvas>
       </ModelErrorBoundary>

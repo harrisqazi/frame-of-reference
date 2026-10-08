@@ -16,6 +16,12 @@ const SENSE_MARK = "\u0001";
 const CENTER_MARK = "\u0002";
 const SENSE_SLOT_CH = Math.max(...SENSE_PHRASES.map((p) => p.length)) + 1;
 
+const FRAME_COUNT = 301;
+const SCROLL_PER_FRAME = 20;
+const FADE_OUT_INDEX = 60;
+const frameUrl = (i) =>
+  `/animation_3/640x360-webp/AB_${String(i * 4).padStart(4, "0")}.webp`;
+
 const SCRIPT = [
   { action: "type", text: "Remember that dream you held.", delay: 40 },
   { action: "wait", ms: 900 },
@@ -30,7 +36,7 @@ const SCRIPT = [
   {
     action: "cycle",
     phrases: SENSE_PHRASES,
-    beat: 600,
+    beat: 480,
   },
   { action: "wait", ms: 500 },
   {
@@ -52,26 +58,22 @@ const TerminalSimulator = ({ step, setStep }) => {
   const [senseActive, setSenseActive] = useState(false);
   const [logoVisible, setLogoVisible] = useState(false);
 
-  const [scrollPosition, setScrollPosition] = useState(0);
-  const [images, setImages] = useState([]);
   const [viewportHeight, setViewportHeight] = useState(800);
-  const displayIndexRef = useRef(0);
-  const lastFrameTimeRef = useRef(0);
+  const displayIndexRef = useRef(-1);
   const rafRef = useRef(null);
   const hasAdvancedRef = useRef(false);
   const scriptRunIdRef = useRef(0);
-  const preloadedRef = useRef(new Set());
+  const preloadedRef = useRef(new Map());
+  const loadedRef = useRef(new Set());
+  const shownFrameRef = useRef(-1);
+  const logoReadyRef = useRef(null);
 
   const imgRef = useRef();
+  const textLayerRef = useRef();
 
-  const totalImages = 1200;
-  const sampledImages = Math.floor(totalImages / 4);
-  const scrollAmountPerImage = 20;
-  const stepSize = Math.floor(totalImages / sampledImages);
-  const maxFramesPerSecond = 5;
-  const maxFrameIndex = sampledImages - 1;
+  const maxFrameIndex = FRAME_COUNT - 1;
   const scrollSpacerHeight =
-    maxFrameIndex * scrollAmountPerImage + viewportHeight;
+    maxFrameIndex * SCROLL_PER_FRAME + viewportHeight;
 
   useEffect(() => {
     const updateViewport = () => setViewportHeight(window.innerHeight);
@@ -80,10 +82,28 @@ const TerminalSimulator = ({ step, setStep }) => {
     return () => window.removeEventListener("resize", updateViewport);
   }, []);
 
+  // Hold the script until fonts, the first frame and the (hidden) logo are
+  // ready, so nothing heavy competes with the typing cadence.
   useEffect(() => {
-    import("@/components/Logo3D");
-    const initialDelayId = setTimeout(() => setScriptReady(true), 800);
-    return () => clearTimeout(initialDelayId);
+    let done = false;
+    const start = () => {
+      if (!done) {
+        done = true;
+        setScriptReady(true);
+      }
+    };
+    const firstFrame = new Image();
+    firstFrame.src = frameUrl(0);
+    Promise.all([
+      document.fonts?.ready,
+      firstFrame.decode().catch(() => {}),
+      new Promise((resolve) => {
+        logoReadyRef.current = resolve;
+      }),
+      new Promise((resolve) => setTimeout(resolve, 800)),
+    ]).then(start);
+    const cap = setTimeout(start, 4000);
+    return () => clearTimeout(cap);
   }, []);
 
   useEffect(() => {
@@ -200,44 +220,31 @@ const TerminalSimulator = ({ step, setStep }) => {
     };
   }, [scriptReady]);
 
-  useEffect(() => {
-    const loadedImages = [];
-    for (let i = 0; i <= totalImages; i += stepSize) {
-      const paddedIndex = String(i).padStart(4, "0");
-      const imagePath = `/animation_3/640x360/AB_${paddedIndex}.png`;
-      loadedImages.push(imagePath);
+  const preloadAround = useCallback((index) => {
+    for (let offset = -4; offset <= 30; offset++) {
+      const target = index + offset;
+      if (target < 0 || target > FRAME_COUNT - 1) continue;
+      if (preloadedRef.current.has(target)) continue;
+      const img = new Image();
+      img.decoding = "async";
+      img.onload = () => loadedRef.current.add(target);
+      img.src = frameUrl(target);
+      preloadedRef.current.set(target, img);
     }
-    setImages(loadedImages);
-  }, [stepSize]);
+  }, []);
 
-  const getScrollTop = () =>
-    window.pageYOffset ||
-    document.documentElement.scrollTop ||
-    document.body.scrollTop ||
-    0;
-
-  const getTargetIndex = useCallback(() => {
-    const index = Math.ceil(getScrollTop() / scrollAmountPerImage);
-    return Math.min(maxFrameIndex, Math.max(0, index));
-  }, [maxFrameIndex, scrollAmountPerImage]);
-
-  const preloadAround = useCallback(
-    (index) => {
-      if (!images.length) return;
-      for (let offset = 0; offset <= 12; offset++) {
-        const target = index + offset;
-        if (
-          target < images.length &&
-          !preloadedRef.current.has(images[target])
-        ) {
-          preloadedRef.current.add(images[target]);
-          const img = new Image();
-          img.src = images[target];
-        }
-      }
-    },
-    [images]
-  );
+  useEffect(() => {
+    if (!scriptReady) return;
+    let next = 0;
+    let timer;
+    const pump = () => {
+      preloadAround(next);
+      next += 30;
+      if (next < FRAME_COUNT) timer = setTimeout(pump, 400);
+    };
+    timer = setTimeout(pump, 1500);
+    return () => clearTimeout(timer);
+  }, [scriptReady, preloadAround]);
 
   const advanceToNextStep = useCallback(() => {
     if (hasAdvancedRef.current) return;
@@ -246,57 +253,43 @@ const TerminalSimulator = ({ step, setStep }) => {
     window.scrollTo(0, 0);
   }, [setStep]);
 
+  // Scrolling drives the frame and fade directly on the DOM, so it never
+  // re-renders React and can't disturb the typing.
   useEffect(() => {
-    if (!images.length) return;
-
-    const tick = (timestamp) => {
-      if (!lastFrameTimeRef.current) lastFrameTimeRef.current = timestamp;
-      const elapsed = timestamp - lastFrameTimeRef.current;
-      lastFrameTimeRef.current = timestamp;
-
-      const targetIndex = getTargetIndex();
-      const maxAdvance = Math.max(
-        1,
-        Math.floor((elapsed / 1000) * maxFramesPerSecond)
+    const tick = () => {
+      const target = Math.min(
+        maxFrameIndex,
+        Math.max(0, Math.ceil(window.scrollY / SCROLL_PER_FRAME))
       );
-
-      if (targetIndex > displayIndexRef.current) {
-        displayIndexRef.current = Math.min(
-          targetIndex,
-          displayIndexRef.current + maxAdvance
-        );
-      } else if (targetIndex < displayIndexRef.current) {
-        displayIndexRef.current = Math.max(
-          targetIndex,
-          displayIndexRef.current - maxAdvance
-        );
+      const current = displayIndexRef.current;
+      if (target !== current) {
+        const next =
+          current < 0 ? target : current + Math.sign(target - current) * Math.max(1, Math.ceil(Math.abs(target - current) / 4));
+        displayIndexRef.current = next;
+        if (
+          imgRef.current &&
+          (next === 0 || loadedRef.current.has(next)) &&
+          shownFrameRef.current !== next
+        ) {
+          shownFrameRef.current = next;
+          imgRef.current.src = frameUrl(next);
+        }
+        if (textLayerRef.current) {
+          textLayerRef.current.style.opacity = String(
+            Math.max(0, 1 - next / FADE_OUT_INDEX)
+          );
+        }
+        preloadAround(next);
+        if (next >= maxFrameIndex) advanceToNextStep();
       }
-
-      setScrollPosition(displayIndexRef.current);
-      preloadAround(displayIndexRef.current);
-
-      if (displayIndexRef.current >= maxFrameIndex) {
-        advanceToNextStep();
-      }
-
       rafRef.current = requestAnimationFrame(tick);
     };
-
+    preloadAround(0);
     rafRef.current = requestAnimationFrame(tick);
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [images, preloadAround, getTargetIndex, maxFrameIndex, advanceToNextStep]);
-
-  useEffect(() => {
-    if (imgRef.current && images[scrollPosition]) {
-      imgRef.current.src = images[scrollPosition];
-    }
-  }, [scrollPosition, images]);
-
-  // Fully faded out before the blue section of the sequence (source frame 259).
-  const fadeOutIndex = Math.floor(240 / stepSize);
-  const opacity = Math.max(0, 1 - scrollPosition / fadeOutIndex);
+  }, [preloadAround, maxFrameIndex, advanceToNextStep]);
 
   const renderText = () => {
     const lines = typedText.split("\n");
@@ -312,7 +305,7 @@ const TerminalSimulator = ({ step, setStep }) => {
         // Fixed-width, left-aligned slot on the right of the row, so letters
         // never shift while they appear or vanish.
         return (
-          <span key={key} className="block text-right text-xl">
+          <span key={key} className="block text-right text-xl opacity-70">
             <span
               className="inline-block text-left"
               style={{ width: `${SENSE_SLOT_CH}ch` }}
@@ -387,7 +380,7 @@ const TerminalSimulator = ({ step, setStep }) => {
             />
           </div>
           <div
-            style={{ opacity }}
+            ref={textLayerRef}
             className="fixed h-screen w-full p-12 flex justify-center"
           >
             <div className="intro-copy relative z-10 text-white text-left w-[400px] pt-8 max-w-11/12 font-mono">
@@ -400,7 +393,11 @@ const TerminalSimulator = ({ step, setStep }) => {
                 )}
               </p>
             </div>
-            {logoVisible && <Logo3D variant="hero" className="intro-logo" />}
+            <Logo3D
+              variant="hero"
+              className={`intro-logo ${logoVisible ? "is-visible" : ""}`}
+              onReady={() => logoReadyRef.current?.()}
+            />
 
             <div className="absolute z-10 phone:bottom-24 bottom-12 w-full flex justify-center pointer-events-auto">
               <button

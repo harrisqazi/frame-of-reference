@@ -236,11 +236,6 @@ body {
   animation-fill-mode: backwards;
   animation-duration: 0.26s;
 }
-@keyframes intro-logo-fade {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 0.58; transform: scale(1); }
-}
-
 .intro-logo {
   position: absolute;
   left: 0;
@@ -249,7 +244,14 @@ body {
   bottom: 8.5rem;
   z-index: 0;
   pointer-events: none;
-  animation: intro-logo-fade 1.8s ease-out both;
+  opacity: 0;
+  transform: scale(0.96);
+  transition: opacity 1.8s ease-out, transform 1.8s ease-out;
+}
+
+.intro-logo.is-visible {
+  opacity: 0.58;
+  transform: scale(1);
 }
 
 .intro-copy,
@@ -376,8 +378,8 @@ body {
 }
 
 .perimeter-ticker text {
-  fill: rgba(0, 143, 17, 0.28);
+  fill: rgba(0, 220, 80, 0.85);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
