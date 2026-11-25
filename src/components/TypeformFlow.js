@@ -10,13 +10,15 @@ const Logo3D = dynamic(() => import("@/components/Logo3D"), {
 });
 const Globe = dynamic(() => import("@/components/Globe"), { ssr: false });
 
-const STEPS = ["healing", "contact", "drawing", "location", "send"];
+const STEPS = ["healing", "solution", "location", "drawing", "name", "email", "send"];
 
 const QUESTIONS = {
   healing: "What needs healing?",
-  contact: "Who should we reach?",
-  drawing: "Draw something.",
-  location: "Where is your healing located?",
+  solution: "What is your proposed solution?",
+  location: "Where is it located?",
+  drawing: "Relevant drawing",
+  name: "What is your name?",
+  email: "What is your email?",
   send: "Send it.",
 };
 
@@ -117,6 +119,22 @@ function useDrawPad(ref, { color = "#111", width = 2, background = "#fff", onDra
   };
 }
 
+function QuestionHeader({ text, skipped, onSkip }) {
+  return (
+    <div className="mb-3 flex items-start justify-between gap-3">
+      <TypedQuestion text={text} className="text-lg text-white" />
+      <label className="shrink-0 mt-1 flex items-center gap-2 text-xs text-gray-300 cursor-pointer whitespace-nowrap">
+        <input
+          type="checkbox"
+          checked={skipped}
+          onChange={(e) => onSkip(e.target.checked)}
+        />
+        Skip question
+      </label>
+    </div>
+  );
+}
+
 function LocationSearch({ locations, setLocations }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
@@ -197,9 +215,11 @@ export default function TypeformFlow({ setStep }) {
   const [stepIdx, setStepIdx] = useState(0);
   const [healingText, setHealingText] = useState("");
   const [healingReady, setHealingReady] = useState(false);
+  const [solutionText, setSolutionText] = useState("");
   const [contact, setContact] = useState({ name: "", email: "" });
   const [locations, setLocations] = useState([]);
   const [skipLocation, setSkipLocation] = useState(false);
+  const [skipDrawing, setSkipDrawing] = useState(false);
   const [sketchUrl, setSketchUrl] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [sendSplash, setSendSplash] = useState(false);
@@ -269,7 +289,7 @@ export default function TypeformFlow({ setStep }) {
       ? locations.map((l) => l.label)
       : ["Not specified"];
 
-  const contactValid = contact.name.trim() && /\S+@\S+\.\S+/.test(contact.email);
+  const emailValid = /\S+@\S+\.\S+/.test(contact.email);
 
   const submitAll = () => {
     if (submitting) return;
@@ -278,8 +298,12 @@ export default function TypeformFlow({ setStep }) {
       kind: "healing",
       answers: [
         { question: QUESTIONS.healing, answer: healingText.trim() },
+        { question: QUESTIONS.solution, answer: solutionText.trim() || "(skipped)" },
         { question: QUESTIONS.location, answer: locationLabels.join(" · ") },
-        { question: QUESTIONS.drawing, answer: sketchUrl ? "Attached" : "Skipped" },
+        {
+          question: QUESTIONS.drawing,
+          answer: sketchUrl && !skipDrawing ? "Attached" : "Skipped",
+        },
       ],
       contact: {
         firstName: firstName || "",
@@ -288,7 +312,7 @@ export default function TypeformFlow({ setStep }) {
         phone: "",
       },
       locations: locationLabels,
-      drawingDataUrl: sketchUrl,
+      drawingDataUrl: skipDrawing ? null : sketchUrl,
       files: [],
       listEntry: null,
     };
@@ -354,47 +378,68 @@ export default function TypeformFlow({ setStep }) {
             )}
           </>
         );
-      case "contact":
+      case "solution":
         return (
           <>
-            <TypedQuestion text={QUESTIONS.contact} />
-            <div className="grid gap-3">
-              <label className="text-xs text-gray-400">
-                Name
-                <input
-                  className="flow-field mt-1"
-                  autoComplete="name"
-                  value={contact.name}
-                  onChange={(e) => setContact((c) => ({ ...c, name: e.target.value }))}
-                />
-              </label>
-              <label className="text-xs text-gray-400">
-                Email
-                <input
-                  type="email"
-                  className="flow-field mt-1"
-                  autoComplete="email"
-                  value={contact.email}
-                  onChange={(e) => setContact((c) => ({ ...c, email: e.target.value }))}
-                />
-              </label>
-              {current === "contact" && (
-                <button
-                  type="button"
-                  className="flow-btn w-full text-center"
-                  disabled={!contactValid}
-                  onClick={next}
-                >
-                  Next
-                </button>
-              )}
+            <TypedQuestion text={QUESTIONS.solution} />
+            <textarea
+              className="healing-bubble"
+              rows={5}
+              value={solutionText}
+              onChange={(e) => setSolutionText(e.target.value)}
+              placeholder="Type freely…"
+            />
+            {current === "solution" && (
+              <button
+                type="button"
+                className="flow-btn w-full mt-3 text-center"
+                onClick={next}
+              >
+                {solutionText.trim() ? "Next" : "Skip"}
+              </button>
+            )}
+          </>
+        );
+      case "location":
+        return (
+          <>
+            <QuestionHeader
+              text={QUESTIONS.location}
+              skipped={skipLocation}
+              onSkip={(checked) => {
+                setSkipLocation(checked);
+                if (checked && current === "location") next();
+              }}
+            />
+            <LocationSearch locations={locations} setLocations={setLocations} />
+            <div className="flex-1 min-h-0 py-3">
+              <div className="globe-fit">
+                <Globe locations={skipLocation ? [] : locations} />
+              </div>
             </div>
+            {current === "location" && (
+              <button
+                type="button"
+                className="flow-btn w-full text-center"
+                disabled={!locations.length}
+                onClick={next}
+              >
+                Continue ↓
+              </button>
+            )}
           </>
         );
       case "drawing":
         return (
           <>
-            <TypedQuestion text={QUESTIONS.drawing} />
+            <QuestionHeader
+              text={QUESTIONS.drawing}
+              skipped={skipDrawing}
+              onSkip={(checked) => {
+                setSkipDrawing(checked);
+                if (checked && current === "drawing") next();
+              }}
+            />
             <canvas
               ref={sketchRef}
               width={360}
@@ -413,50 +458,51 @@ export default function TypeformFlow({ setStep }) {
               >
                 Clear drawing
               </button>
-              <span>Optional — scroll to skip ↓</span>
+              <span>Scroll to skip ↓</span>
             </div>
             {current === "drawing" && (
-              <button type="button" className="flow-btn w-full mt-4 text-center" onClick={next}>
-                {sketchUrl ? "Next" : "Skip"}
+              <button
+                type="button"
+                className="flow-btn w-full mt-4 text-center"
+                disabled={!sketchUrl}
+                onClick={next}
+              >
+                Next
               </button>
             )}
           </>
         );
-      case "location":
+      case "name":
+      case "email": {
+        const valid = key === "name" ? !!contact.name.trim() : emailValid;
         return (
           <>
-            <TypedQuestion text={QUESTIONS.location} className="mb-3 text-lg text-white" />
-            <LocationSearch locations={locations} setLocations={setLocations} />
-            <div className="flex-1 min-h-0 py-3">
-              <div className="globe-fit">
-                <Globe locations={skipLocation ? [] : locations} />
-              </div>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={skipLocation}
-                  onChange={(e) => {
-                    setSkipLocation(e.target.checked);
-                    if (e.target.checked && current === "location") next();
-                  }}
-                />
-                Skip
-              </label>
-              {current === "location" && (
-                <button
-                  type="button"
-                  className="flow-btn text-center"
-                  disabled={!locations.length}
-                  onClick={next}
-                >
-                  Continue ↓
-                </button>
-              )}
-            </div>
+            <TypedQuestion text={QUESTIONS[key]} />
+            <input
+              type={key === "email" ? "email" : "text"}
+              autoComplete={key}
+              enterKeyHint="next"
+              className="flow-field"
+              value={contact[key]}
+              onChange={(e) => setContact((c) => ({ ...c, [key]: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && valid && current === key) next();
+              }}
+              autoFocus={current === key}
+            />
+            {current === key && (
+              <button
+                type="button"
+                className="flow-btn w-full mt-3 text-center"
+                disabled={!valid}
+                onClick={next}
+              >
+                Next
+              </button>
+            )}
           </>
         );
+      }
       case "send":
         return (
           <div className="flex-1 flex flex-col items-center justify-center gap-10">

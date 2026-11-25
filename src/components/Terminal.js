@@ -4,9 +4,7 @@ import dynamic from "next/dynamic";
 const Logo3D = dynamic(() => import("@/components/Logo3D"), { ssr: false });
 
 const CENTER_MARK = "\u0002";
-const SMOKE_MARK = "\u0003";
-const SMOKE_STAGGER_MS = 70;
-const SMOKE_DURATION_MS = 1400;
+const LOWER_MARK = "\u0003";
 
 const FRAME_COUNT = 301;
 const SCROLL_PER_FRAME = 20;
@@ -20,7 +18,8 @@ const frameUrl = (i) =>
 const SCRIPT = [
   { action: "type", text: "Where have you been?", delay: 55 },
   { action: "wait", ms: 1400 },
-  { action: "smoke", text: "Where will you go?" },
+  { action: "type", text: `\n\n${LOWER_MARK}Where will you go?`, delay: 55 },
+  { action: "logo" },
   { action: "wait", ms: 900 },
   {
     action: "type",
@@ -104,13 +103,8 @@ const TerminalSimulator = ({ step, setStep }) => {
           }
         } else if (segment.action === "wait") {
           await wait(segment.ms);
-        } else if (segment.action === "smoke") {
-          content += `\n\n${SMOKE_MARK}${segment.text}`;
-          setTypedText(content);
-          await wait(
-            segment.text.length * SMOKE_STAGGER_MS + SMOKE_DURATION_MS
-          );
-          if (!cancelled) setLogoVisible(true);
+        } else if (segment.action === "logo") {
+          setLogoVisible(true);
         }
       }
       if (!cancelled) setButtonVisible(true);
@@ -276,24 +270,10 @@ const TerminalSimulator = ({ step, setStep }) => {
       const isLast = key === lines.length - 1;
       const cursor = isLast && <span className="matrix-cursor" />;
 
-      if (item.startsWith(SMOKE_MARK)) {
+      if (item.startsWith(LOWER_MARK)) {
         return (
-          <span key={key} className="block text-xl">
-            {item
-              .slice(1)
-              .split("")
-              .map((ch, i) => (
-                <span
-                  key={i}
-                  className="smoke-char"
-                  style={{
-                    animationDelay: `${i * SMOKE_STAGGER_MS}ms`,
-                    animationDuration: `${SMOKE_DURATION_MS}ms`,
-                  }}
-                >
-                  {ch === " " ? "\u00a0" : ch}
-                </span>
-              ))}
+          <span key={key} className="block mt-[6vh]">
+            {item.slice(1)}
             {cursor}
           </span>
         );

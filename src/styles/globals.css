@@ -211,8 +211,8 @@ body {
   height: 1.1em;
   margin-left: 3px;
   vertical-align: text-bottom;
-  background: #00b32c;
-  box-shadow: 0 0 6px rgba(0, 179, 44, 0.85);
+  background: var(--matrix);
+  box-shadow: 0 0 6px rgba(0, 143, 17, 0.85);
   animation: matrix-blink 1.2s step-end infinite;
 }
 
@@ -235,32 +235,6 @@ body {
   animation-direction: reverse;
   animation-fill-mode: backwards;
   animation-duration: 0.26s;
-}
-
-@keyframes smoke-in {
-  0% {
-    opacity: 0;
-    filter: blur(14px);
-    transform: translate(-0.4em, 0.6em) scale(1.8) rotate(-8deg);
-    text-shadow: 0 0 24px rgba(255, 255, 255, 0.9);
-  }
-  60% {
-    opacity: 0.8;
-    filter: blur(3px);
-  }
-  100% {
-    opacity: 1;
-    filter: blur(0);
-    transform: translate(0, 0) scale(1) rotate(0);
-    text-shadow: 0 0 0 rgba(255, 255, 255, 0);
-  }
-}
-
-.smoke-char {
-  display: inline-block;
-  animation-name: smoke-in;
-  animation-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
-  animation-fill-mode: both;
 }
 
 .intro-logo {

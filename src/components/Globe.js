@@ -23,7 +23,7 @@ function latLngToVec(lat, lng, r = 1) {
 function Earth({ locations }) {
   const tilt = useRef();
   const spin = useRef();
-  const texture = useLoader(THREE.TextureLoader, "/textures/earth-dark.jpg");
+  const texture = useLoader(THREE.TextureLoader, "/textures/earth-land.jpg");
   const focus = locations[locations.length - 1];
 
   const markers = useMemo(
@@ -71,11 +71,10 @@ function Earth({ locations }) {
         <mesh>
           <sphereGeometry args={[1, 64, 64]} />
           <meshStandardMaterial
-            map={texture}
-            color="#0b2a12"
+            color="#03200c"
             emissiveMap={texture}
-            emissive="#008f11"
-            emissiveIntensity={1.6}
+            emissive="#00b32c"
+            emissiveIntensity={1.1}
             roughness={0.9}
           />
         </mesh>
