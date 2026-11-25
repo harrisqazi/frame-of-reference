@@ -47,10 +47,12 @@ export const config = {
 };
 
 function kindLabel(body) {
+  if (body.kind === "healing") return "What needs healing";
   return body.kind === "solution" ? "Solution" : "Problem that needs a solution";
 }
 
 function subjectFor(body) {
+  if (body.kind === "healing") return "CARE PACKAGE";
   const first = body.answers?.find((a) => a.answer)?.answer || "";
   return `New ${body.kind || "submission"} — ${first.slice(0, 50) || "Frame of Reference"}`;
 }

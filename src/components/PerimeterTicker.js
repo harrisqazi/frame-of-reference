@@ -23,7 +23,8 @@ export default function PerimeterTicker({ items = [] }) {
     const el = measureRef.current;
     if (!el || !items.length || !size.w) return;
     const perimeter = 2 * (size.w + size.h);
-    const unit = items.join("   ◆   ") + "   ◆   ";
+    const sep = "\u00a0\u00a0\u00a0◆\u00a0\u00a0\u00a0";
+    const unit = items.join(sep) + sep;
     let s = unit;
     el.textContent = s;
     let guard = 0;

@@ -19,7 +19,7 @@ export default function Home() {
       >
         {step === 0 && <TerminalSimulator step={step} setStep={setStep} />}
         {step === 1 && (
-          <div className="fixed h-screen overflow-y-auto w-full p-4 flex items-start justify-center pt-12 pb-24">
+          <div className="fixed h-[100dvh] overflow-y-auto w-full p-4 flex items-start justify-center pt-12 pb-24">
             <TypeformFlow setStep={setStep} />
           </div>
         )}

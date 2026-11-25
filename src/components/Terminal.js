@@ -3,70 +3,50 @@ import dynamic from "next/dynamic";
 
 const Logo3D = dynamic(() => import("@/components/Logo3D"), { ssr: false });
 
-const SENSE_PHRASES = [
-  "the vision",
-  "the taste",
-  "the touch",
-  "the smell",
-  "the sound",
-];
-
-// Marks a typed line that should sit on the right side of its row.
-const SENSE_MARK = "\u0001";
 const CENTER_MARK = "\u0002";
-const SENSE_SLOT_CH = Math.max(...SENSE_PHRASES.map((p) => p.length)) + 1;
+const SMOKE_MARK = "\u0003";
+const SMOKE_STAGGER_MS = 70;
+const SMOKE_DURATION_MS = 1400;
 
 const FRAME_COUNT = 301;
 const SCROLL_PER_FRAME = 20;
 const FADE_OUT_INDEX = 60;
+const AUTOPLAY_FRAME_MS = 28;
+const GESTURES_TO_AUTOPLAY = 2;
+const GESTURE_GAP_MS = 350;
 const frameUrl = (i) =>
   `/animation_3/640x360-webp/AB_${String(i * 4).padStart(4, "0")}.webp`;
 
 const SCRIPT = [
-  { action: "type", text: "Remember that dream you held.", delay: 40 },
+  { action: "type", text: "Where have you been?", delay: 55 },
+  { action: "wait", ms: 1400 },
+  { action: "smoke", text: "Where will you go?" },
   { action: "wait", ms: 900 },
-  { action: "flash", text: "VISUALIZE IT", ms: 1100 },
-  { action: "type", text: "\n\nBring it back for a moment", delay: 40 },
-  { action: "dots", count: 3, interval: 600 },
   {
     action: "type",
-    text: "\n\nImagine seeing it through with all 5 senses:\n\n",
-    delay: 40,
-  },
-  {
-    action: "cycle",
-    phrases: SENSE_PHRASES,
-    beat: 480,
-  },
-  { action: "wait", ms: 500 },
-  {
-    action: "type",
-    text: `\n\n${CENTER_MARK}Now take it to the source.`,
+    text: `\n\n${CENTER_MARK}Now take a moment and bridge the gap.`,
     delay: 50,
   },
 ];
 
 const TerminalSimulator = ({ step, setStep }) => {
   const [typedText, setTypedText] = useState("");
-  const [countdownLabel, setCountdownLabel] = useState("");
   const [buttonVisible, setButtonVisible] = useState(false);
   const [scriptReady, setScriptReady] = useState(false);
-  const [flashOverlay, setFlashOverlay] = useState(null);
-  const [senseWord, setSenseWord] = useState("");
-  const [senseAppearing, setSenseAppearing] = useState(false);
-  const [senseVanishing, setSenseVanishing] = useState(false);
-  const [senseActive, setSenseActive] = useState(false);
   const [logoVisible, setLogoVisible] = useState(false);
 
   const [viewportHeight, setViewportHeight] = useState(800);
   const displayIndexRef = useRef(-1);
   const rafRef = useRef(null);
   const hasAdvancedRef = useRef(false);
-  const scriptRunIdRef = useRef(0);
   const preloadedRef = useRef(new Map());
   const loadedRef = useRef(new Set());
   const shownFrameRef = useRef(-1);
   const logoReadyRef = useRef(null);
+  const autoplayRef = useRef(false);
+  const autoStartRef = useRef(null);
+  const logoPausedRef = useRef(false);
+  const [logoPaused, setLogoPaused] = useState(false);
 
   const imgRef = useRef();
   const textLayerRef = useRef();
@@ -108,113 +88,35 @@ const TerminalSimulator = ({ step, setStep }) => {
 
   useEffect(() => {
     if (!scriptReady) return;
-
-    const runId = ++scriptRunIdRef.current;
     let cancelled = false;
-
-    const wait = (ms) =>
-      new Promise((resolve) => {
-        setTimeout(resolve, ms);
-      });
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
     const runScript = async () => {
       let content = "";
-
-      const setContent = (next) => {
-        content = next;
-        if (!cancelled && scriptRunIdRef.current === runId) {
-          setTypedText(content);
-        }
-      };
-
-      const typeChars = async (text, delay) => {
-        for (let i = 0; i < text.length; i++) {
-          if (cancelled || scriptRunIdRef.current !== runId) return;
-          content += text[i];
-          setContent(content);
-          await wait(delay);
-        }
-      };
-
-      const live = () => !cancelled && scriptRunIdRef.current === runId;
-
       for (const segment of SCRIPT) {
-        if (cancelled || scriptRunIdRef.current !== runId) return;
-
+        if (cancelled) return;
         if (segment.action === "type") {
-          setCountdownLabel("");
-          await typeChars(segment.text, segment.delay);
-        } else if (segment.action === "countdown") {
-          for (const n of segment.steps) {
-            if (cancelled || scriptRunIdRef.current !== runId) return;
-            setCountdownLabel(String(n));
-            await wait(segment.interval);
+          for (const ch of segment.text) {
+            if (cancelled) return;
+            content += ch;
+            setTypedText(content);
+            await wait(segment.delay);
           }
-          setCountdownLabel("");
         } else if (segment.action === "wait") {
-          setCountdownLabel("");
           await wait(segment.ms);
-        } else if (segment.action === "dots") {
-          setCountdownLabel("");
-          // Scheduled against a fixed start time so main-thread jank
-          // can't push later dots off the beat.
-          const base = content;
-          const start = performance.now();
-          for (let d = 1; d <= segment.count; d++) {
-            await wait(start + d * segment.interval - performance.now());
-            if (!live()) return;
-            setContent(base + ".".repeat(d));
-          }
-          await wait(start + (segment.count + 1) * segment.interval - performance.now());
-          setLogoVisible(true);
-          await wait(segment.interval);
-        } else if (segment.action === "cycle") {
-          setCountdownLabel("");
-          setSenseActive(true);
-          // Each phrase spans three beats: appear, hold, vanish.
-          const start = performance.now();
-          const atBeat = (n) => wait(start + n * segment.beat - performance.now());
-          for (let p = 0; p < segment.phrases.length; p++) {
-            if (!live()) return;
-            setSenseVanishing(false);
-            setSenseAppearing(true);
-            setSenseWord(segment.phrases[p]);
-            await atBeat(p * 3 + 1);
-            if (!live()) return;
-            setSenseAppearing(false);
-            if (p === segment.phrases.length - 1) break;
-            await atBeat(p * 3 + 2);
-            if (!live()) return;
-            setSenseVanishing(true);
-            await atBeat(p * 3 + 3);
-            if (!live()) return;
-            setSenseWord("");
-          }
-          if (!live()) return;
-          setSenseWord("");
-          setSenseActive(false);
-          setContent(
-            content + SENSE_MARK + segment.phrases[segment.phrases.length - 1]
+        } else if (segment.action === "smoke") {
+          content += `\n\n${SMOKE_MARK}${segment.text}`;
+          setTypedText(content);
+          await wait(
+            segment.text.length * SMOKE_STAGGER_MS + SMOKE_DURATION_MS
           );
-        } else if (segment.action === "flash") {
-          setCountdownLabel("");
-          if (!cancelled && scriptRunIdRef.current === runId) {
-            setFlashOverlay(segment.text);
-          }
-          await wait(segment.ms);
-          if (!cancelled && scriptRunIdRef.current === runId) {
-            setFlashOverlay(null);
-          }
+          if (!cancelled) setLogoVisible(true);
         }
       }
-
-      if (!cancelled && scriptRunIdRef.current === runId) {
-        setButtonVisible(true);
-      }
+      if (!cancelled) setButtonVisible(true);
     };
 
     runScript();
-
     return () => {
       cancelled = true;
     };
@@ -253,34 +155,111 @@ const TerminalSimulator = ({ step, setStep }) => {
     window.scrollTo(0, 0);
   }, [setStep]);
 
-  // Scrolling drives the frame and fade directly on the DOM, so it never
-  // re-renders React and can't disturb the typing.
+  const startAutoplay = useCallback(() => {
+    autoplayRef.current = true;
+  }, []);
+
+  // After a couple of separate scroll gestures, the sequence plays itself
+  // through to the end at a steady pace.
   useEffect(() => {
-    const tick = () => {
-      const target = Math.min(
-        maxFrameIndex,
-        Math.max(0, Math.ceil(window.scrollY / SCROLL_PER_FRAME))
-      );
+    let gestures = 0;
+    let lastInput = 0;
+    const gesture = () => {
+      const now = performance.now();
+      if (now - lastInput > GESTURE_GAP_MS) {
+        gestures += 1;
+        if (gestures >= GESTURES_TO_AUTOPLAY) startAutoplay();
+      }
+      lastInput = now;
+    };
+    const onWheel = (e) => {
+      if (e.deltaY > 0) gesture();
+    };
+    let touchY = null;
+    const onTouchStart = (e) => {
+      touchY = e.touches[0]?.clientY ?? null;
+    };
+    const onTouchEnd = (e) => {
+      const endY = e.changedTouches[0]?.clientY;
+      if (touchY != null && endY != null && touchY - endY > 20) {
+        lastInput = 0;
+        gesture();
+      }
+      touchY = null;
+    };
+    const onKey = (e) => {
+      if (["ArrowDown", "PageDown", " ", "Spacebar"].includes(e.key)) {
+        lastInput = 0;
+        gesture();
+      }
+    };
+    window.addEventListener("wheel", onWheel, { passive: true });
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [startAutoplay]);
+
+  // Frames and the text fade are written straight to the DOM, so scrolling
+  // never re-renders React and can't disturb the typing.
+  useEffect(() => {
+    const show = (index) => {
+      displayIndexRef.current = index;
+      if (
+        imgRef.current &&
+        (index === 0 || loadedRef.current.has(index)) &&
+        shownFrameRef.current !== index
+      ) {
+        shownFrameRef.current = index;
+        imgRef.current.src = frameUrl(index);
+      }
+      if (textLayerRef.current) {
+        textLayerRef.current.style.opacity = String(
+          Math.max(0, 1 - index / FADE_OUT_INDEX)
+        );
+      }
+      const hidden = index >= FADE_OUT_INDEX;
+      if (hidden !== logoPausedRef.current) {
+        logoPausedRef.current = hidden;
+        setLogoPaused(hidden);
+      }
+      preloadAround(index);
+      if (index >= maxFrameIndex) advanceToNextStep();
+    };
+
+    const tick = (now) => {
       const current = displayIndexRef.current;
-      if (target !== current) {
-        const next =
-          current < 0 ? target : current + Math.sign(target - current) * Math.max(1, Math.ceil(Math.abs(target - current) / 4));
-        displayIndexRef.current = next;
-        if (
-          imgRef.current &&
-          (next === 0 || loadedRef.current.has(next)) &&
-          shownFrameRef.current !== next
-        ) {
-          shownFrameRef.current = next;
-          imgRef.current.src = frameUrl(next);
+      if (autoplayRef.current) {
+        if (!autoStartRef.current) {
+          autoStartRef.current = { t: now, index: Math.max(current, 0) };
         }
-        if (textLayerRef.current) {
-          textLayerRef.current.style.opacity = String(
-            Math.max(0, 1 - next / FADE_OUT_INDEX)
+        const { t, index } = autoStartRef.current;
+        const desired = Math.min(
+          maxFrameIndex,
+          index + Math.floor((now - t) / AUTOPLAY_FRAME_MS)
+        );
+        let next = desired;
+        while (next > current && !loadedRef.current.has(next)) next -= 1;
+        if (next > current) show(next);
+      } else {
+        const target = Math.min(
+          maxFrameIndex,
+          Math.max(0, Math.ceil(window.scrollY / SCROLL_PER_FRAME))
+        );
+        if (target !== current) {
+          const diff = target - current;
+          show(
+            current < 0
+              ? target
+              : current +
+                  Math.sign(diff) * Math.max(1, Math.ceil(Math.abs(diff) / 4))
           );
         }
-        preloadAround(next);
-        if (next >= maxFrameIndex) advanceToNextStep();
       }
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -295,48 +274,27 @@ const TerminalSimulator = ({ step, setStep }) => {
     const lines = typedText.split("\n");
     return lines.map((item, key) => {
       const isLast = key === lines.length - 1;
-      const cycling = isLast && senseActive;
-      const cursor = isLast && !countdownLabel && (
-        <span className="matrix-cursor" />
-      );
+      const cursor = isLast && <span className="matrix-cursor" />;
 
-      if (cycling || item.startsWith(SENSE_MARK)) {
-        const chars = cycling ? senseWord : item.slice(1);
-        // Fixed-width, left-aligned slot on the right of the row, so letters
-        // never shift while they appear or vanish.
+      if (item.startsWith(SMOKE_MARK)) {
         return (
-          <span key={key} className="block text-right text-xl opacity-70">
-            <span
-              className="inline-block text-left"
-              style={{ width: `${SENSE_SLOT_CH}ch` }}
-            >
-              {chars.split("").map((ch, i) => (
+          <span key={key} className="block text-xl">
+            {item
+              .slice(1)
+              .split("")
+              .map((ch, i) => (
                 <span
-                  key={`${chars}-${i}`}
-                  className={
-                    !cycling
-                      ? undefined
-                      : senseAppearing
-                      ? "vanish-char vanish-char--in"
-                      : senseVanishing
-                      ? "vanish-char"
-                      : undefined
-                  }
-                  style={
-                    !cycling
-                      ? undefined
-                      : senseAppearing
-                      ? { animationDelay: `${i * 20}ms` }
-                      : senseVanishing
-                      ? { animationDelay: `${(chars.length - 1 - i) * 25}ms` }
-                      : undefined
-                  }
+                  key={i}
+                  className="smoke-char"
+                  style={{
+                    animationDelay: `${i * SMOKE_STAGGER_MS}ms`,
+                    animationDuration: `${SMOKE_DURATION_MS}ms`,
+                  }}
                 >
                   {ch === " " ? "\u00a0" : ch}
                 </span>
               ))}
-              {cursor}
-            </span>
+            {cursor}
           </span>
         );
       }
@@ -362,13 +320,6 @@ const TerminalSimulator = ({ step, setStep }) => {
 
   return (
     <>
-      {flashOverlay && (
-        <div className="fixed inset-0 z-[60] bg-white flex items-center justify-center">
-          <p className="text-black font-mono text-3xl sm:text-5xl tracking-[0.35em] uppercase">
-            {flashOverlay}
-          </p>
-        </div>
-      )}
       {step === 0 && (
         <>
           <div style={{ height: `${scrollSpacerHeight}px` }} />
@@ -384,25 +335,19 @@ const TerminalSimulator = ({ step, setStep }) => {
             className="fixed h-screen w-full p-12 flex justify-center"
           >
             <div className="intro-copy relative z-10 text-white text-left w-[400px] pt-8 max-w-11/12 font-mono">
-              <p className="bg-transparent">
-                {renderText()}
-                {countdownLabel && (
-                  <span className="block mt-6 text-2xl text-white/90">
-                    {countdownLabel}
-                  </span>
-                )}
-              </p>
+              <p className="bg-transparent">{renderText()}</p>
             </div>
             <Logo3D
               variant="hero"
               className={`intro-logo ${logoVisible ? "is-visible" : ""}`}
+              paused={logoPaused}
               onReady={() => logoReadyRef.current?.()}
             />
 
             <div className="absolute z-10 phone:bottom-24 bottom-12 w-full flex justify-center pointer-events-auto">
               <button
                 type="button"
-                onClick={advanceToNextStep}
+                onClick={startAutoplay}
                 className={`mt-4 p-4 border-white border-2 font-mono transition-opacity duration-1000 bg-transparent text-white hover:bg-white/10 ${
                   buttonVisible
                     ? "opacity-100"

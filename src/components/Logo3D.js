@@ -248,6 +248,7 @@ export default function Logo3D({
   className = "",
   onSendProgress,
   onReady,
+  paused = false,
 }) {
   const mode = sending ? "send" : variant;
   const config = MODE_CONFIG[mode] || MODE_CONFIG.corner;
@@ -283,6 +284,7 @@ export default function Logo3D({
       <ModelErrorBoundary>
         <Canvas
           dpr={[1, 1.5]}
+          frameloop={paused ? "never" : "always"}
           gl={{
             alpha: true,
             antialias: true,
