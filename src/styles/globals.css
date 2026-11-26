@@ -237,11 +237,51 @@ body {
   animation-duration: 0.26s;
 }
 
+@keyframes smoke-char-in {
+  0% {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translate(-0.2em, 0.5em) scale(1.6);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+
+@keyframes smoke-drift {
+  0% { transform: translate(-6%, 4%) scale(1); opacity: 0.35; }
+  50% { transform: translate(4%, -6%) scale(1.15); opacity: 0.6; }
+  100% { transform: translate(-6%, 4%) scale(1); opacity: 0.35; }
+}
+
+.smoke-line {
+  position: relative;
+}
+
+.smoke-line::before {
+  content: "";
+  position: absolute;
+  inset: -2.5em -2em;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse 40% 45% at 30% 55%, rgba(255, 255, 255, 0.14), transparent 70%),
+    radial-gradient(ellipse 45% 40% at 70% 45%, rgba(200, 220, 210, 0.1), transparent 70%);
+  filter: blur(14px);
+  animation: smoke-drift 7s ease-in-out infinite;
+}
+
+.smoke-char {
+  display: inline-block;
+  animation: smoke-char-in 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
 .intro-logo {
   position: absolute;
   left: 0;
   right: 0;
-  top: 52vh;
+  top: 57vh;
   bottom: 8.5rem;
   z-index: 0;
   pointer-events: none;

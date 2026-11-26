@@ -17,8 +17,13 @@ const frameUrl = (i) =>
 
 const SCRIPT = [
   { action: "type", text: "Where have you been?", delay: 55 },
-  { action: "wait", ms: 1400 },
-  { action: "type", text: `\n\n${LOWER_MARK}Where will you go?`, delay: 55 },
+  { action: "wait", ms: 900 },
+  { action: "flash", text: "?", ms: 1100 },
+  {
+    action: "type",
+    text: `\n\n${LOWER_MARK}... where do you see yourself going?`,
+    delay: 75,
+  },
   { action: "logo" },
   { action: "wait", ms: 900 },
   {
@@ -33,6 +38,7 @@ const TerminalSimulator = ({ step, setStep }) => {
   const [buttonVisible, setButtonVisible] = useState(false);
   const [scriptReady, setScriptReady] = useState(false);
   const [logoVisible, setLogoVisible] = useState(false);
+  const [flashText, setFlashText] = useState(null);
 
   const [viewportHeight, setViewportHeight] = useState(800);
   const displayIndexRef = useRef(-1);
@@ -103,6 +109,10 @@ const TerminalSimulator = ({ step, setStep }) => {
           }
         } else if (segment.action === "wait") {
           await wait(segment.ms);
+        } else if (segment.action === "flash") {
+          setFlashText(segment.text);
+          await wait(segment.ms);
+          if (!cancelled) setFlashText(null);
         } else if (segment.action === "logo") {
           setLogoVisible(true);
         }
@@ -272,8 +282,22 @@ const TerminalSimulator = ({ step, setStep }) => {
 
       if (item.startsWith(LOWER_MARK)) {
         return (
-          <span key={key} className="block mt-[6vh]">
-            {item.slice(1)}
+          <span key={key} className="smoke-line block mt-[10vh]">
+            {item
+              .slice(1)
+              .split(" ")
+              .map((word, w) => (
+                <React.Fragment key={w}>
+                  {w > 0 && " "}
+                  <span className="inline-block whitespace-nowrap">
+                    {word.split("").map((ch, i) => (
+                      <span key={i} className="smoke-char">
+                        {ch}
+                      </span>
+                    ))}
+                  </span>
+                </React.Fragment>
+              ))}
             {cursor}
           </span>
         );
@@ -281,7 +305,7 @@ const TerminalSimulator = ({ step, setStep }) => {
 
       if (item.startsWith(CENTER_MARK)) {
         return (
-          <span key={key} className="block text-center mt-[12vh]">
+          <span key={key} className="block text-center mt-[8vh]">
             {item.slice(1)}
             {cursor}
           </span>
@@ -300,6 +324,13 @@ const TerminalSimulator = ({ step, setStep }) => {
 
   return (
     <>
+      {flashText && (
+        <div className="fixed inset-0 z-[60] bg-white flex items-center justify-center">
+          <p className="text-black font-mono text-[40vmin] leading-none">
+            {flashText}
+          </p>
+        </div>
+      )}
       {step === 0 && (
         <>
           <div style={{ height: `${scrollSpacerHeight}px` }} />

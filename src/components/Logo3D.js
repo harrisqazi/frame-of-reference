@@ -158,6 +158,9 @@ function LogoModel({ mode, sendProgress, onReady }) {
     baseScaleRef.current = centerAndScale(clone, config.scale);
     clone.traverse((child) => {
       if (child.isMesh && child.material) {
+        if (!child.geometry.attributes.normal) {
+          child.geometry.computeVertexNormals();
+        }
         child.material = isInnerBall(child)
           ? rainbowMarble()
           : Array.isArray(child.material)
